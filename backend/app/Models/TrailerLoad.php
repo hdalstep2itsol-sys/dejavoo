@@ -80,9 +80,16 @@ class TrailerLoad extends Model
         return $this->hasMany(NormalizedTransaction::class);
     }
 
-    public function scopeWithCalculatedUnits(Builder $query): Builder
+    public function adjustments(): HasMany
     {
-        return $query->withSum('normalizedTransactions', 'unit_delta');
+        return $this->hasMany(TrailerLoadAdjustment::class);
+    }
+
+    public function scopeWithUnitTotals(Builder $query): Builder
+    {
+        return $query
+            ->withSum('normalizedTransactions', 'unit_delta')
+            ->withSum('adjustments', 'unit_delta');
     }
 
     public function calculatedUnits(): string
@@ -96,5 +103,34 @@ class TrailerLoad extends Model
             '0',
             NormalizedTransactionService::UNIT_SCALE,
         );
+    }
+
+    public function manualAdjustmentUnits(): string
+    {
+        $sum = array_key_exists('adjustments_sum_unit_delta', $this->attributes)
+            ? $this->adjustments_sum_unit_delta
+            : $this->adjustments()->sum('unit_delta');
+
+        return bcadd(
+            (string) ($sum ?? '0'),
+            '0',
+            NormalizedTransactionService::UNIT_SCALE,
+        );
+    }
+
+    public function operationalUnits(): string
+    {
+        return bcadd(
+            $this->calculatedUnits(),
+            $this->manualAdjustmentUnits(),
+            NormalizedTransactionService::UNIT_SCALE,
+        );
+    }
+
+    public function loadUnitTotals(): static
+    {
+        return $this
+            ->loadSum('normalizedTransactions', 'unit_delta')
+            ->loadSum('adjustments', 'unit_delta');
     }
 }

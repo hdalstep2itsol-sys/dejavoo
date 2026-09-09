@@ -19,7 +19,7 @@ class TrailerLoadController extends Controller
     {
         $activeLoads = TrailerLoad::query()
             ->where('status', TrailerLoadStatus::Active->value)
-            ->withCalculatedUnits()
+            ->withUnitTotals()
             ->with($this->relations());
 
         $myRoutes = (clone $activeLoads)
@@ -46,8 +46,7 @@ class TrailerLoadController extends Controller
 
     public function show(Request $request, TrailerLoad $trailerLoad): TrailerLoadResource
     {
-        $load = $trailerLoad->load($this->relations())
-            ->loadSum('normalizedTransactions', 'unit_delta');
+        $load = $trailerLoad->load($this->relations())->loadUnitTotals();
 
         abort_unless($this->isRelevant($load, $request), 404);
 

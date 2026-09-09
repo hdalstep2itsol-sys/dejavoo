@@ -71,6 +71,6 @@ class TrailerSwapService
             'committedBy:id,name,email,is_active',
             'swappedBy:id,name,email,is_active',
             'warehouseConfirmedBy:id,name,email,is_active',
-        ])->loadSum('normalizedTransactions', 'unit_delta');
+        ])->loadUnitTotals();
     }
 }

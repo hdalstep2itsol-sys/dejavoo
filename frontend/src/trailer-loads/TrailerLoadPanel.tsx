@@ -13,6 +13,7 @@ import {
 import type { TrailerLoad, TrailerLoadStatus } from "./types";
 import { requestErrorMessage } from "@/locations/errors";
 import { LoadTransactions } from "@/transactions/LoadTransactions";
+import { ManualAdjustments } from "@/adjustments/ManualAdjustments";
 
 const statusLabels: Record<TrailerLoadStatus, string> = {
   active: "Active",
@@ -182,7 +183,16 @@ export function TrailerLoadPanel({
           <LoadDetail label="Started" value={formatDateTime(currentLoad.started_at)} />
           <LoadDetail label="Location" value={location.name} />
           <LoadDetail label="Calculated units" value={displayUnits(currentLoad.calculated_units)} />
+          <LoadDetail
+            label="Manual adjustments"
+            value={displayUnits(currentLoad.manual_adjustment_units)}
+          />
+          <LoadDetail label="Operational units" value={displayUnits(currentLoad.operational_units)} />
           <LoadDetail label="Threshold" value={location.haul_threshold} />
+          <LoadDetail
+            label="Warehouse actual count"
+            value={currentLoad.warehouse_actual_count?.toString() ?? "Not available"}
+          />
           <LoadDetail label="Route type" value={location.route_type === "open" ? "Open" : "Dedicated"} />
           <LoadDetail
             label="Dedicated driver"
@@ -294,7 +304,7 @@ export function TrailerLoadPanel({
           onClick={() => setTransactionLoadId(currentLoad.id)}
           className="mt-4 text-sm font-semibold text-cyan-300"
         >
-          View current load transactions
+          View current load activity
         </button>
       )}
 
@@ -316,13 +326,15 @@ export function TrailerLoadPanel({
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Status</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Started</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Calculated units</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Manual adjustments</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Operational units</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Swapped</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Swapped by</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Actual count</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Confirmed</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Confirmed by</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Notes</th>
-                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Transactions</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Activity</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -331,6 +343,8 @@ export function TrailerLoadPanel({
                     <td className="px-3 py-3">{statusLabels[loadCycle.status]}</td>
                     <td className="px-3 py-3">{formatDateTime(loadCycle.started_at)}</td>
                     <td className="px-3 py-3">{displayUnits(loadCycle.calculated_units)}</td>
+                    <td className="px-3 py-3">{displayUnits(loadCycle.manual_adjustment_units)}</td>
+                    <td className="px-3 py-3">{displayUnits(loadCycle.operational_units)}</td>
                     <td className="px-3 py-3">
                       {loadCycle.swapped_at ? formatDateTime(loadCycle.swapped_at) : "Not available"}
                     </td>
@@ -372,6 +386,14 @@ export function TrailerLoadPanel({
           locationId={location.id}
           loadId={transactionLoadId}
           onClose={() => setTransactionLoadId(null)}
+        />
+      )}
+      {transactionLoadId !== null && (
+        <ManualAdjustments
+          key={`adjustments-${transactionLoadId}`}
+          locationId={location.id}
+          loadId={transactionLoadId}
+          onChanged={load}
         />
       )}
     </section>

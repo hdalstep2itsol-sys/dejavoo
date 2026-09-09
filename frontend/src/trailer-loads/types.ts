@@ -9,6 +9,8 @@ export interface TrailerLoad {
   status: TrailerLoadStatus;
   started_at: string;
   calculated_units: string;
+  manual_adjustment_units: string;
+  operational_units: string;
   location?: {
     id: number;
     name: string;

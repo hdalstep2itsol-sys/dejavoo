@@ -17,7 +17,7 @@ class TrailerLoadController extends Controller
     public function index(Location $location): AnonymousResourceCollection
     {
         $loads = $location->trailerLoads()
-            ->withCalculatedUnits()
+            ->withUnitTotals()
             ->with($this->relations())
             ->orderByDesc('started_at')
             ->orderByDesc('id')
@@ -30,7 +30,7 @@ class TrailerLoadController extends Controller
     {
         $load = $location->trailerLoads()
             ->where('status', TrailerLoadStatus::Active->value)
-            ->withCalculatedUnits()
+            ->withUnitTotals()
             ->with($this->relations())
             ->first();
 
@@ -53,14 +53,14 @@ class TrailerLoadController extends Controller
         );
 
         return (new TrailerLoadResource(
-            $load->load($this->relations())->loadSum('normalizedTransactions', 'unit_delta'),
+            $load->load($this->relations())->loadUnitTotals(),
         ))->response()->setStatusCode(201);
     }
 
     public function show(Location $location, TrailerLoad $trailerLoad): TrailerLoadResource
     {
         return new TrailerLoadResource(
-            $trailerLoad->load($this->relations())->loadSum('normalizedTransactions', 'unit_delta'),
+            $trailerLoad->load($this->relations())->loadUnitTotals(),
         );
     }
 

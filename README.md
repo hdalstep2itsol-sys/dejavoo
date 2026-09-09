@@ -41,6 +41,8 @@ All three use the password supplied through `DEV_TEST_USER_PASSWORD`. The seeder
 
 After signing in as Owner/Admin, user management is available at `http://localhost:3000/admin/users`. Location and Dejavoo terminal mapping administration is available at `http://localhost:3000/admin/locations`.
 
+Location price changes create effective-dated history entries. Within each location's trailer/load section, Owner/Admin can review normalized transactions and add append-only manual unit adjustments; corrections are recorded as compensating entries rather than edits or deletions.
+
 To create deterministic normalized SALE, REFUND, and VOID samples for an existing trailer/load, run:
 
 ```powershell
@@ -71,4 +73,4 @@ Invoke-RestMethod http://localhost:8080/api/health
 Invoke-RestMethod http://localhost:3000/api/backend-health
 ```
 
-The application currently includes authentication, role-based user administration, locations, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, warehouse confirmation, and provider-independent normalized transaction/unit calculations. It does not include the FEED receiver, raw provider amount mapping, dashboards, forecasting, notifications, or reports.
+The application currently includes authentication, role-based user administration, locations with effective-dated price history, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, warehouse confirmation, provider-independent normalized transaction calculations, and append-only manual unit adjustments. It does not include the FEED receiver, raw provider amount mapping, dashboards, forecasting, notifications, or reports.

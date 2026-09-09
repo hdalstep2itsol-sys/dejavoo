@@ -15,6 +15,8 @@ class TrailerLoadResource extends JsonResource
             'status' => $this->status->value,
             'started_at' => $this->started_at?->toIso8601String(),
             'calculated_units' => $this->calculatedUnits(),
+            'manual_adjustment_units' => $this->manualAdjustmentUnits(),
+            'operational_units' => $this->operationalUnits(),
             'location' => $this->whenLoaded('location', fn () => [
                 'id' => $this->location->id,
                 'name' => $this->location->name,

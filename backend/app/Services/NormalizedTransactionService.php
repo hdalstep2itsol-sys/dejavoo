@@ -15,6 +15,8 @@ class NormalizedTransactionService
 {
     public const UNIT_SCALE = 8;
 
+    public function __construct(private readonly LocationPriceService $priceService) {}
+
     public function create(
         int $locationId,
         NormalizedTransactionType $transactionType,
@@ -41,7 +43,9 @@ class NormalizedTransactionService
             $load = $this->resolveLoad($location, $occurredAt);
             $this->validateTerminal($location, $dejavooTerminalId);
 
-            $unitPrice = (string) $location->unit_price;
+            $unitPrice = (string) $this->priceService
+                ->resolveAt($location, $occurredAt)
+                ->unit_price;
 
             if (bccomp($unitPrice, '0', 2) <= 0) {
                 throw new NormalizedTransactionException(

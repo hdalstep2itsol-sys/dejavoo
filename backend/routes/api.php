@@ -3,7 +3,9 @@
 use App\Http\Controllers\Api\Admin\DejavooTerminalController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\LocationController;
+use App\Http\Controllers\Api\Admin\LocationPriceHistoryController;
 use App\Http\Controllers\Api\Admin\NormalizedTransactionController;
+use App\Http\Controllers\Api\Admin\TrailerLoadAdjustmentController;
 use App\Http\Controllers\Api\Admin\TrailerLoadCommitmentController;
 use App\Http\Controllers\Api\Admin\TrailerLoadController;
 use App\Http\Controllers\Api\Admin\UserController;
@@ -47,6 +49,8 @@ Route::prefix('admin')
             ->only(['index', 'store', 'show', 'update']);
         Route::patch('/locations/{location}/status', [LocationController::class, 'updateStatus'])
             ->name('admin.locations.status');
+        Route::get('/locations/{location}/price-history', [LocationPriceHistoryController::class, 'index'])
+            ->name('admin.locations.price-history.index');
 
         Route::post('/locations/{location}/terminals', [DejavooTerminalController::class, 'store'])
             ->name('admin.locations.terminals.store');
@@ -65,6 +69,10 @@ Route::prefix('admin')
             ->name('admin.locations.trailer-loads.show');
         Route::get('/locations/{location}/trailer-loads/{trailerLoad}/transactions', [NormalizedTransactionController::class, 'index'])
             ->name('admin.locations.trailer-loads.transactions.index');
+        Route::get('/locations/{location}/trailer-loads/{trailerLoad}/adjustments', [TrailerLoadAdjustmentController::class, 'index'])
+            ->name('admin.locations.trailer-loads.adjustments.index');
+        Route::post('/locations/{location}/trailer-loads/{trailerLoad}/adjustments', [TrailerLoadAdjustmentController::class, 'store'])
+            ->name('admin.locations.trailer-loads.adjustments.store');
         Route::get('/locations/{location}/trailer-loads/{trailerLoad}/commitment', [TrailerLoadCommitmentController::class, 'show'])
             ->name('admin.locations.trailer-loads.commitment.show');
         Route::put('/locations/{location}/trailer-loads/{trailerLoad}/commitment', [TrailerLoadCommitmentController::class, 'update'])

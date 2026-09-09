@@ -12,6 +12,7 @@ use App\Models\Location;
 use App\Models\NormalizedTransaction;
 use App\Models\TrailerLoad;
 use App\Models\User;
+use App\Services\LocationPriceService;
 use App\Services\NormalizedTransactionService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -21,6 +22,18 @@ use Tests\TestCase;
 class NormalizedTransactionTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        CarbonImmutable::setTestNow('2026-09-09 00:00:00');
+    }
+
+    protected function tearDown(): void
+    {
+        CarbonImmutable::setTestNow();
+        parent::tearDown();
+    }
 
     public function test_twenty_dollar_sale_at_twenty_dollar_unit_price_calculates_one_unit(): void
     {
@@ -167,7 +180,7 @@ class NormalizedTransactionTest extends TestCase
         $this->createTransaction($location, '25.00', NormalizedTransactionType::Sale, '2026-09-09 08:30:00');
         $this->createTransaction($location, '5.00', NormalizedTransactionType::Refund, '2026-09-09 09:00:00');
 
-        $load = TrailerLoad::query()->withCalculatedUnits()->findOrFail($load->id);
+        $load = TrailerLoad::query()->withUnitTotals()->findOrFail($load->id);
 
         $this->assertSame('1.00000000', $load->calculatedUnits());
         $this->assertSame(2, $load->warehouse_actual_count);
@@ -281,13 +294,17 @@ class NormalizedTransactionTest extends TestCase
 
     private function location(string $unitPrice): Location
     {
-        return Location::query()->create([
+        $location = Location::query()->create([
             'name' => 'Normalized Transaction Test '.uniqid(),
             'unit_price' => $unitPrice,
             'haul_threshold' => '70.00',
             'route_type' => LocationRouteType::Open,
             'is_active' => true,
         ]);
+
+        app(LocationPriceService::class)->ensureHistory($location);
+
+        return $location;
     }
 
     private function load(

@@ -177,6 +177,14 @@ export function WarehouseLoadsPage() {
                     <LoadDetail label="Load started" value={formatDateTime(load.started_at)} />
                     <LoadDetail label="Status" value="Pending warehouse count" />
                     <LoadDetail label="Calculated units" value={displayUnits(load.calculated_units)} />
+                    <LoadDetail
+                      label="Manual adjustments"
+                      value={displayUnits(load.manual_adjustment_units)}
+                    />
+                    <LoadDetail
+                      label="Operational units"
+                      value={displayUnits(load.operational_units)}
+                    />
                   </dl>
 
                   {selectedLoadId === load.id ? (

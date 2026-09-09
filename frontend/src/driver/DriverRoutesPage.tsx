@@ -236,6 +236,7 @@ function RouteCard({
         <RouteDetail label="Route type" value={load.location?.route_type === "dedicated" ? "Dedicated" : "Open"} />
         <RouteDetail label="Load status" value="Active" />
         <RouteDetail label="Started" value={formatDateTime(load.started_at)} />
+        <RouteDetail label="Operational units" value={displayUnits(load.operational_units)} />
         <RouteDetail label="Calculated units" value={displayUnits(load.calculated_units)} />
         <RouteDetail label="Threshold" value={load.location?.haul_threshold ?? "Not available"} />
         <RouteDetail label="Committed driver" value={load.committed_driver?.name ?? "Unclaimed"} />

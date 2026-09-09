@@ -15,6 +15,7 @@ import { LocationForm } from "@/locations/LocationForm";
 import { TerminalManager } from "@/locations/TerminalManager";
 import type { DriverOption, Location, LocationInput } from "@/locations/types";
 import { TrailerLoadPanel } from "@/trailer-loads/TrailerLoadPanel";
+import { LocationPriceHistoryPanel } from "@/price-history/LocationPriceHistoryPanel";
 
 export default function LocationDetailPage() {
   const params = useParams<{ id: string }>();
@@ -158,6 +159,11 @@ export default function LocationDetailPage() {
                   onSubmit={save}
                 />
               </section>
+
+              <LocationPriceHistoryPanel
+                key={`${location.id}-${location.unit_price}-${location.updated_at}`}
+                locationId={location.id}
+              />
 
               <TrailerLoadPanel location={location} drivers={drivers} />
 

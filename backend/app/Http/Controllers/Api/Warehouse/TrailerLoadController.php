@@ -16,7 +16,7 @@ class TrailerLoadController extends Controller
     {
         $loads = TrailerLoad::query()
             ->where('status', TrailerLoadStatus::PendingWarehouseCount->value)
-            ->withCalculatedUnits()
+            ->withUnitTotals()
             ->with($this->relations())
             ->orderBy('swapped_at')
             ->orderBy('id')
@@ -33,8 +33,7 @@ class TrailerLoadController extends Controller
         );
 
         return new TrailerLoadResource(
-            $trailerLoad->load($this->relations())
-                ->loadSum('normalizedTransactions', 'unit_delta'),
+            $trailerLoad->load($this->relations())->loadUnitTotals(),
         );
     }
 

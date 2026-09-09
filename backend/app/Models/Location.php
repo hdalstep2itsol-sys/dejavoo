@@ -50,4 +50,9 @@ class Location extends Model
     {
         return $this->hasMany(NormalizedTransaction::class);
     }
+
+    public function priceHistory(): HasMany
+    {
+        return $this->hasMany(LocationPriceHistory::class);
+    }
 }
