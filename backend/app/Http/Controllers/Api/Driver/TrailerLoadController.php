@@ -36,10 +36,30 @@ class TrailerLoadController extends Controller
             ->orderBy('started_at')
             ->get();
 
+        $history = TrailerLoad::query()
+            ->where('swapped_by_user_id', $request->user()->getKey())
+            ->whereIn('status', [
+                TrailerLoadStatus::PendingWarehouseCount->value,
+                TrailerLoadStatus::Completed->value,
+            ])
+            ->withUnitTotals()
+            ->with($this->relations())
+            ->orderByDesc('swapped_at')
+            ->orderByDesc('id')
+            ->get();
+
         return response()->json([
             'data' => [
+                'summary' => [
+                    'my_active_routes' => $myRoutes->count(),
+                    'open_routes' => $openRoutes->count(),
+                    'ready_loads' => $myRoutes
+                        ->filter(fn (TrailerLoad $load) => $load->operationalStatus() === 'ready')
+                        ->count(),
+                ],
                 'my_routes' => TrailerLoadResource::collection($myRoutes)->resolve($request),
                 'open_routes' => TrailerLoadResource::collection($openRoutes)->resolve($request),
+                'history' => TrailerLoadResource::collection($history)->resolve($request),
             ],
         ]);
     }

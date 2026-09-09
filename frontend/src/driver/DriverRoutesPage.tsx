@@ -5,25 +5,18 @@ import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { useAuth } from "@/auth/AuthProvider";
 import { requestErrorMessage } from "@/locations/errors";
+import { displayUnits, formatDateTime, titleCase } from "@/dashboards/format";
+import { LoadProgress, OperationalBadge } from "@/dashboards/LoadProgress";
 import type { TrailerLoad } from "@/trailer-loads/types";
 import { claimDriverRoute, listDriverRoutes, swapDriverTrailer } from "./api";
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function displayUnits(value: string): string {
-  return value.includes(".") ? value.replace(/0+$/, "").replace(/\.$/, "") : value;
-}
 
 export function DriverRoutesPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [myRoutes, setMyRoutes] = useState<TrailerLoad[]>([]);
   const [openRoutes, setOpenRoutes] = useState<TrailerLoad[]>([]);
+  const [history, setHistory] = useState<TrailerLoad[]>([]);
+  const [summary, setSummary] = useState({ my_active_routes: 0, open_routes: 0, ready_loads: 0 });
   const [loading, setLoading] = useState(true);
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [swappingId, setSwappingId] = useState<number | null>(null);
@@ -36,6 +29,8 @@ export function DriverRoutesPage() {
       const routes = await listDriverRoutes();
       setMyRoutes(routes.my_routes);
       setOpenRoutes(routes.open_routes);
+      setHistory(routes.history);
+      setSummary(routes.summary);
       setError("");
     } catch (caught) {
       setError(requestErrorMessage(caught));
@@ -52,6 +47,8 @@ export function DriverRoutesPage() {
         if (!cancelled) {
           setMyRoutes(routes.my_routes);
           setOpenRoutes(routes.open_routes);
+          setHistory(routes.history);
+          setSummary(routes.summary);
           setError("");
         }
       })
@@ -158,6 +155,12 @@ export function DriverRoutesPage() {
             </p>
           )}
 
+          <section className="mt-7 grid gap-4 sm:grid-cols-3">
+            <SummaryCard label="My Active Routes" count={summary.my_active_routes} loading={loading} />
+            <SummaryCard label="Open Routes" count={summary.open_routes} loading={loading} />
+            <SummaryCard label="Ready Loads" count={summary.ready_loads} loading={loading} />
+          </section>
+
           <RouteSection title="My Routes" loading={loading} empty="No routes are committed to you.">
             {myRoutes.map((load) => (
               <RouteCard key={load.id} load={load}>
@@ -187,6 +190,22 @@ export function DriverRoutesPage() {
               </RouteCard>
             ))}
           </RouteSection>
+
+          <section className="mt-8">
+            <h2 className="text-2xl font-semibold">My Haul History</h2>
+            {loading ? (
+              <p className="mt-4 text-slate-400">Loading haul history...</p>
+            ) : history.length === 0 ? (
+              <p className="mt-4 rounded-xl border border-dashed border-slate-700 p-6 text-slate-400">No completed trailer swaps yet.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-slate-950/60 text-slate-400"><tr>{["Location", "Swapped", "Operational units", "Warehouse status", "Actual count"].map((heading) => <th key={heading} className="px-4 py-3 font-medium">{heading}</th>)}</tr></thead>
+                  <tbody className="divide-y divide-slate-800">{history.map((load) => <tr key={load.id}><td className="px-4 py-4 font-semibold">{load.location?.name}</td><td className="px-4 py-4">{formatDateTime(load.swapped_at)}</td><td className="px-4 py-4">{displayUnits(load.operational_units)}</td><td className="px-4 py-4">{titleCase(load.status)}</td><td className="px-4 py-4">{load.warehouse_actual_count ?? "Pending"}</td></tr>)}</tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </div>
       </main>
     </ProtectedRoute>
@@ -232,9 +251,13 @@ function RouteCard({
   return (
     <article className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
       <h3 className="text-xl font-semibold">{load.location?.name}</h3>
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <OperationalBadge status={load.operational_status} />
+        <LoadProgress percentage={load.progress_percentage} />
+      </div>
       <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
         <RouteDetail label="Route type" value={load.location?.route_type === "dedicated" ? "Dedicated" : "Open"} />
-        <RouteDetail label="Load status" value="Active" />
+        <RouteDetail label="Load status" value={titleCase(load.operational_status)} />
         <RouteDetail label="Started" value={formatDateTime(load.started_at)} />
         <RouteDetail label="Operational units" value={displayUnits(load.operational_units)} />
         <RouteDetail label="Calculated units" value={displayUnits(load.calculated_units)} />
@@ -244,6 +267,10 @@ function RouteCard({
       {children}
     </article>
   );
+}
+
+function SummaryCard({ label, count, loading }: { label: string; count: number; loading: boolean }) {
+  return <article className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-3xl font-semibold">{loading ? "—" : count}</p></article>;
 }
 
 function RouteDetail({ label, value }: { label: string; value: string }) {

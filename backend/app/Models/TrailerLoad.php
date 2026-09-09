@@ -127,6 +127,37 @@ class TrailerLoad extends Model
         );
     }
 
+    public function operationalStatus(): string
+    {
+        return bccomp(
+            $this->operationalUnits(),
+            (string) $this->location->haul_threshold,
+            NormalizedTransactionService::UNIT_SCALE,
+        ) >= 0 ? 'ready' : 'active';
+    }
+
+    public function progressPercentage(): string
+    {
+        return bcdiv(
+            bcmul($this->operationalUnits(), '100', 10),
+            (string) $this->location->haul_threshold,
+            2,
+        );
+    }
+
+    public function warehouseVariance(): ?string
+    {
+        if ($this->warehouse_actual_count === null) {
+            return null;
+        }
+
+        return bcsub(
+            (string) $this->warehouse_actual_count,
+            $this->operationalUnits(),
+            NormalizedTransactionService::UNIT_SCALE,
+        );
+    }
+
     public function loadUnitTotals(): static
     {
         return $this

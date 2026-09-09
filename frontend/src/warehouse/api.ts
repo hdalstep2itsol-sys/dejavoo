@@ -1,5 +1,13 @@
 import { apiRequest, initializeCsrf } from "@/lib/api";
 import type { TrailerLoad } from "@/trailer-loads/types";
+import type { WarehouseDashboardData } from "@/dashboards/types";
+
+export async function getWarehouseDashboard(): Promise<WarehouseDashboardData> {
+  const response = await apiRequest<{ data: WarehouseDashboardData }>(
+    "/api/warehouse/dashboard",
+  );
+  return response.data;
+}
 
 export async function listPendingWarehouseLoads(): Promise<TrailerLoad[]> {
   const response = await apiRequest<{ data: TrailerLoad[] }>(

@@ -17,6 +17,14 @@ class TrailerLoadResource extends JsonResource
             'calculated_units' => $this->calculatedUnits(),
             'manual_adjustment_units' => $this->manualAdjustmentUnits(),
             'operational_units' => $this->operationalUnits(),
+            'operational_status' => $this->whenLoaded(
+                'location',
+                fn () => $this->operationalStatus(),
+            ),
+            'progress_percentage' => $this->whenLoaded(
+                'location',
+                fn () => $this->progressPercentage(),
+            ),
             'location' => $this->whenLoaded('location', fn () => [
                 'id' => $this->location->id,
                 'name' => $this->location->name,
@@ -66,6 +74,7 @@ class TrailerLoadResource extends JsonResource
                     : null,
             ),
             'warehouse_actual_count' => $this->warehouse_actual_count,
+            'warehouse_variance' => $this->warehouseVariance(),
             'warehouse_notes' => $this->warehouse_notes,
             'warehouse_confirmed_at' => $this->warehouse_confirmed_at?->toIso8601String(),
             'warehouse_confirmed_by' => $this->whenLoaded(

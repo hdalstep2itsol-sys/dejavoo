@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\DejavooTerminalController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\LocationController;
@@ -38,6 +39,13 @@ Route::prefix('admin')
     ->middleware(['auth:sanctum', 'active', 'role:owner_admin'])
     ->scopeBindings()
     ->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('admin.dashboard');
+        Route::get('/routes', [DashboardController::class, 'routes'])->name('admin.routes');
+        Route::get('/warehouse-pending', [DashboardController::class, 'pendingWarehouse'])
+            ->name('admin.warehouse-pending');
+        Route::get('/load-history', [DashboardController::class, 'history'])
+            ->name('admin.load-history');
+
         Route::get('/drivers', [DriverController::class, 'index'])->name('admin.drivers.index');
 
         Route::apiResource('users', UserController::class)
@@ -97,6 +105,8 @@ Route::prefix('driver')
 Route::prefix('warehouse')
     ->middleware(['auth:sanctum', 'active', 'role:warehouse_staff'])
     ->group(function () {
+        Route::get('/dashboard', [WarehouseTrailerLoadController::class, 'dashboard'])
+            ->name('warehouse.dashboard');
         Route::get('/trailer-loads', [WarehouseTrailerLoadController::class, 'index'])
             ->name('warehouse.trailer-loads.index');
         Route::get('/trailer-loads/{trailerLoad}', [WarehouseTrailerLoadController::class, 'show'])

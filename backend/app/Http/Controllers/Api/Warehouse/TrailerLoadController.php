@@ -8,10 +8,43 @@ use App\Http\Requests\Warehouse\ConfirmTrailerLoadRequest;
 use App\Http\Resources\TrailerLoadResource;
 use App\Models\TrailerLoad;
 use App\Services\WarehouseConfirmationService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class TrailerLoadController extends Controller
 {
+    public function dashboard(Request $request): JsonResponse
+    {
+        $pending = TrailerLoad::query()
+            ->where('status', TrailerLoadStatus::PendingWarehouseCount->value)
+            ->withUnitTotals()
+            ->with($this->relations())
+            ->orderBy('swapped_at')
+            ->orderBy('id')
+            ->get();
+
+        $recentConfirmed = TrailerLoad::query()
+            ->where('status', TrailerLoadStatus::Completed->value)
+            ->where('warehouse_confirmed_by_user_id', $request->user()->getKey())
+            ->withUnitTotals()
+            ->with($this->relations())
+            ->orderByDesc('warehouse_confirmed_at')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'data' => [
+                'summary' => [
+                    'awaiting_warehouse_count' => $pending->count(),
+                ],
+                'pending' => TrailerLoadResource::collection($pending)->resolve($request),
+                'recent_confirmed' => TrailerLoadResource::collection($recentConfirmed)->resolve($request),
+            ],
+        ]);
+    }
+
     public function index(): AnonymousResourceCollection
     {
         $loads = TrailerLoad::query()

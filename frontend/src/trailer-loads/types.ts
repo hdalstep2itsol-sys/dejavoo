@@ -11,6 +11,8 @@ export interface TrailerLoad {
   calculated_units: string;
   manual_adjustment_units: string;
   operational_units: string;
+  operational_status: "active" | "ready";
+  progress_percentage: string;
   location?: {
     id: number;
     name: string;
@@ -45,6 +47,7 @@ export interface TrailerLoad {
     is_active: boolean;
   } | null;
   warehouse_actual_count: number | null;
+  warehouse_variance: string | null;
   warehouse_notes: string | null;
   warehouse_confirmed_at: string | null;
   warehouse_confirmed_by: {

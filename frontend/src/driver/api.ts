@@ -2,8 +2,14 @@ import { apiRequest, initializeCsrf } from "@/lib/api";
 import type { TrailerLoad } from "@/trailer-loads/types";
 
 export interface DriverRoutes {
+  summary: {
+    my_active_routes: number;
+    open_routes: number;
+    ready_loads: number;
+  };
   my_routes: TrailerLoad[];
   open_routes: TrailerLoad[];
+  history: TrailerLoad[];
 }
 
 export async function listDriverRoutes(): Promise<DriverRoutes> {

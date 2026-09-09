@@ -7,7 +7,7 @@ import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { useAuth } from "@/auth/AuthProvider";
 import { requestErrorMessage } from "@/locations/errors";
 import type { TrailerLoad } from "@/trailer-loads/types";
-import { confirmWarehouseLoad, listPendingWarehouseLoads } from "./api";
+import { confirmWarehouseLoad, getWarehouseDashboard } from "./api";
 
 function formatDateTime(value: string | null): string {
   if (!value) {
@@ -28,6 +28,8 @@ export function WarehouseLoadsPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [loads, setLoads] = useState<TrailerLoad[]>([]);
+  const [recentConfirmed, setRecentConfirmed] = useState<TrailerLoad[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [selectedLoadId, setSelectedLoadId] = useState<number | null>(null);
   const [actualCount, setActualCount] = useState("");
   const [notes, setNotes] = useState("");
@@ -39,7 +41,10 @@ export function WarehouseLoadsPage() {
 
   const loadPending = useCallback(async () => {
     try {
-      setLoads(await listPendingWarehouseLoads());
+      const dashboard = await getWarehouseDashboard();
+      setLoads(dashboard.pending);
+      setRecentConfirmed(dashboard.recent_confirmed);
+      setPendingCount(dashboard.summary.awaiting_warehouse_count);
       setError("");
     } catch (caught) {
       setError(requestErrorMessage(caught));
@@ -51,10 +56,12 @@ export function WarehouseLoadsPage() {
   useEffect(() => {
     let cancelled = false;
 
-    void listPendingWarehouseLoads()
-      .then((pendingLoads) => {
+    void getWarehouseDashboard()
+      .then((dashboard) => {
         if (!cancelled) {
-          setLoads(pendingLoads);
+          setLoads(dashboard.pending);
+          setRecentConfirmed(dashboard.recent_confirmed);
+          setPendingCount(dashboard.summary.awaiting_warehouse_count);
           setError("");
         }
       })
@@ -155,6 +162,11 @@ export function WarehouseLoadsPage() {
             </p>
           )}
 
+          <section className="mt-7 max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Awaiting Warehouse Count</p>
+            <p className="mt-2 text-3xl font-semibold">{loading ? "—" : pendingCount}</p>
+          </section>
+
           <section className="mt-8 grid gap-4">
             {loading ? (
               <p className="text-slate-400">Loading pending loads...</p>
@@ -240,6 +252,22 @@ export function WarehouseLoadsPage() {
                   )}
                 </article>
               ))
+            )}
+          </section>
+
+          <section className="mt-8">
+            <h2 className="text-2xl font-semibold">Recently Confirmed by Me</h2>
+            {loading ? (
+              <p className="mt-4 text-slate-400">Loading recent confirmations...</p>
+            ) : recentConfirmed.length === 0 ? (
+              <p className="mt-4 rounded-xl border border-dashed border-slate-700 p-6 text-slate-400">No recent confirmations.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead className="bg-slate-950/60 text-slate-400"><tr><th className="px-4 py-3 font-medium">Location</th><th className="px-4 py-3 font-medium">Actual count</th><th className="px-4 py-3 font-medium">Confirmed at</th></tr></thead>
+                  <tbody className="divide-y divide-slate-800">{recentConfirmed.map((load) => <tr key={load.id}><td className="px-4 py-4 font-semibold">{load.location?.name}</td><td className="px-4 py-4">{load.warehouse_actual_count}</td><td className="px-4 py-4">{formatDateTime(load.warehouse_confirmed_at)}</td></tr>)}</tbody>
+                </table>
+              </div>
             )}
           </section>
         </div>
