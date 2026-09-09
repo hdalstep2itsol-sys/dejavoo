@@ -3,8 +3,11 @@
 use App\Http\Controllers\Api\Admin\DejavooTerminalController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\LocationController;
+use App\Http\Controllers\Api\Admin\TrailerLoadCommitmentController;
 use App\Http\Controllers\Api\Admin\TrailerLoadController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\Driver\TrailerLoadController as DriverTrailerLoadController;
+use App\Http\Controllers\Api\Warehouse\TrailerLoadController as WarehouseTrailerLoadController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -51,4 +54,34 @@ Route::prefix('admin')
             ->name('admin.locations.trailer-loads.store');
         Route::get('/locations/{location}/trailer-loads/{trailerLoad}', [TrailerLoadController::class, 'show'])
             ->name('admin.locations.trailer-loads.show');
+        Route::get('/locations/{location}/trailer-loads/{trailerLoad}/commitment', [TrailerLoadCommitmentController::class, 'show'])
+            ->name('admin.locations.trailer-loads.commitment.show');
+        Route::put('/locations/{location}/trailer-loads/{trailerLoad}/commitment', [TrailerLoadCommitmentController::class, 'update'])
+            ->name('admin.locations.trailer-loads.commitment.update');
+        Route::delete('/locations/{location}/trailer-loads/{trailerLoad}/commitment', [TrailerLoadCommitmentController::class, 'destroy'])
+            ->name('admin.locations.trailer-loads.commitment.destroy');
+    });
+
+Route::prefix('driver')
+    ->middleware(['auth:sanctum', 'role:driver'])
+    ->group(function () {
+        Route::get('/trailer-loads', [DriverTrailerLoadController::class, 'index'])
+            ->name('driver.trailer-loads.index');
+        Route::get('/trailer-loads/{trailerLoad}', [DriverTrailerLoadController::class, 'show'])
+            ->name('driver.trailer-loads.show');
+        Route::post('/trailer-loads/{trailerLoad}/claim', [DriverTrailerLoadController::class, 'claim'])
+            ->name('driver.trailer-loads.claim');
+        Route::post('/trailer-loads/{trailerLoad}/swap', [DriverTrailerLoadController::class, 'swap'])
+            ->name('driver.trailer-loads.swap');
+    });
+
+Route::prefix('warehouse')
+    ->middleware(['auth:sanctum', 'role:warehouse_staff'])
+    ->group(function () {
+        Route::get('/trailer-loads', [WarehouseTrailerLoadController::class, 'index'])
+            ->name('warehouse.trailer-loads.index');
+        Route::get('/trailer-loads/{trailerLoad}', [WarehouseTrailerLoadController::class, 'show'])
+            ->name('warehouse.trailer-loads.show');
+        Route::post('/trailer-loads/{trailerLoad}/confirm', [WarehouseTrailerLoadController::class, 'confirm'])
+            ->name('warehouse.trailer-loads.confirm');
     });

@@ -17,7 +17,7 @@ class TrailerLoadController extends Controller
     public function index(Location $location): AnonymousResourceCollection
     {
         $loads = $location->trailerLoads()
-            ->with('createdBy:id,name,email')
+            ->with($this->relations())
             ->orderByDesc('started_at')
             ->orderByDesc('id')
             ->get();
@@ -29,7 +29,7 @@ class TrailerLoadController extends Controller
     {
         $load = $location->trailerLoads()
             ->where('status', TrailerLoadStatus::Active->value)
-            ->with(['location:id,name', 'createdBy:id,name,email'])
+            ->with($this->relations())
             ->first();
 
         if (! $load) {
@@ -51,14 +51,29 @@ class TrailerLoadController extends Controller
         );
 
         return (new TrailerLoadResource(
-            $load->load(['location:id,name', 'createdBy:id,name,email']),
+            $load->load($this->relations()),
         ))->response()->setStatusCode(201);
     }
 
     public function show(Location $location, TrailerLoad $trailerLoad): TrailerLoadResource
     {
         return new TrailerLoadResource(
-            $trailerLoad->load(['location:id,name', 'createdBy:id,name,email']),
+            $trailerLoad->load($this->relations()),
         );
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function relations(): array
+    {
+        return [
+            'location:id,name,route_type,dedicated_driver_id',
+            'createdBy:id,name,email',
+            'committedDriver:id,name,email',
+            'committedBy:id,name,email',
+            'swappedBy:id,name,email',
+            'warehouseConfirmedBy:id,name,email',
+        ];
     }
 }

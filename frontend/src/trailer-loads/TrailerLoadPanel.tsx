@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { Location } from "@/locations/types";
 import {
+  assignTrailerLoadDriver,
   getCurrentTrailerLoad,
   initializeTrailerLoad,
   listTrailerLoads,
+  removeTrailerLoadDriver,
 } from "./api";
 import type { TrailerLoad, TrailerLoadStatus } from "./types";
 import { requestErrorMessage } from "@/locations/errors";
@@ -24,10 +26,24 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function TrailerLoadPanel({ location }: { location: Location }) {
+import type { DriverOption } from "@/locations/types";
+
+const commitmentLabels = {
+  dedicated: "Dedicated",
+  open_claim: "Open claim",
+};
+
+export function TrailerLoadPanel({
+  location,
+  drivers,
+}: {
+  location: Location;
+  drivers: DriverOption[];
+}) {
   const [currentLoad, setCurrentLoad] = useState<TrailerLoad | null>(null);
   const [history, setHistory] = useState<TrailerLoad[]>([]);
   const [startedAt, setStartedAt] = useState("");
+  const [selectedDriverId, setSelectedDriverId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +56,7 @@ export function TrailerLoadPanel({ location }: { location: Location }) {
       ]);
       setCurrentLoad(current);
       setHistory(loads);
+      setSelectedDriverId(current?.committed_driver?.id.toString() ?? "");
       setError("");
     } catch (caught) {
       setError(requestErrorMessage(caught));
@@ -59,6 +76,7 @@ export function TrailerLoadPanel({ location }: { location: Location }) {
         if (!cancelled) {
           setCurrentLoad(current);
           setHistory(loads);
+          setSelectedDriverId(current?.committed_driver?.id.toString() ?? "");
           setError("");
         }
       })
@@ -94,6 +112,50 @@ export function TrailerLoadPanel({ location }: { location: Location }) {
     }
   }
 
+  async function assignDriver(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!currentLoad || !selectedDriverId) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const updated = await assignTrailerLoadDriver(
+        location.id,
+        currentLoad.id,
+        Number(selectedDriverId),
+      );
+      setCurrentLoad(updated);
+      setSelectedDriverId(updated.committed_driver?.id.toString() ?? "");
+    } catch (caught) {
+      setError(requestErrorMessage(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeDriver() {
+    if (!currentLoad) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const updated = await removeTrailerLoadDriver(location.id, currentLoad.id);
+      setCurrentLoad(updated);
+      setSelectedDriverId("");
+    } catch (caught) {
+      setError(requestErrorMessage(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
       <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-400">
@@ -112,6 +174,26 @@ export function TrailerLoadPanel({ location }: { location: Location }) {
           <LoadDetail
             label="Dedicated driver"
             value={location.dedicated_driver?.name ?? "Not applicable"}
+          />
+          <LoadDetail
+            label="Committed driver"
+            value={currentLoad.committed_driver?.name ?? "Not committed"}
+          />
+          <LoadDetail
+            label="Commitment source"
+            value={
+              currentLoad.commitment_source
+                ? commitmentLabels[currentLoad.commitment_source]
+                : "Not committed"
+            }
+          />
+          <LoadDetail
+            label="Committed at"
+            value={
+              currentLoad.committed_at
+                ? formatDateTime(currentLoad.committed_at)
+                : "Not committed"
+            }
           />
         </dl>
       ) : (
@@ -146,6 +228,53 @@ export function TrailerLoadPanel({ location }: { location: Location }) {
         </div>
       )}
 
+      {!loading && currentLoad && (
+        <form
+          onSubmit={assignDriver}
+          className="mt-6 max-w-xl rounded-xl border border-slate-700 p-4"
+        >
+          <h2 className="font-semibold">Driver commitment</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Assign, change, or remove the driver committed to this active load.
+          </p>
+          <label className="mt-4 grid gap-2 text-sm font-medium">
+            Committed driver
+            <select
+              required
+              value={selectedDriverId}
+              onChange={(event) => setSelectedDriverId(event.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 outline-none focus:border-cyan-400"
+            >
+              <option value="">Select a driver</option>
+              {drivers.map((driver) => (
+                <option key={driver.id} value={driver.id}>
+                  {driver.name} ({driver.email})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={saving || !selectedDriverId}
+              className="rounded-lg bg-cyan-400 px-4 py-2.5 font-semibold text-slate-950 disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Assign / change driver"}
+            </button>
+            {currentLoad.committed_driver && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={removeDriver}
+                className="rounded-lg border border-red-900 px-4 py-2.5 font-semibold text-red-300 disabled:opacity-60"
+              >
+                Remove commitment
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+
       {error && (
         <p role="alert" className="mt-4 rounded-lg bg-red-950 px-4 py-3 text-red-200">
           {error}
@@ -163,6 +292,12 @@ export function TrailerLoadPanel({ location }: { location: Location }) {
                 <tr>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Status</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Started</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Swapped</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Swapped by</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Actual count</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Confirmed</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Confirmed by</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -170,6 +305,24 @@ export function TrailerLoadPanel({ location }: { location: Location }) {
                   <tr key={loadCycle.id}>
                     <td className="px-3 py-3">{statusLabels[loadCycle.status]}</td>
                     <td className="px-3 py-3">{formatDateTime(loadCycle.started_at)}</td>
+                    <td className="px-3 py-3">
+                      {loadCycle.swapped_at ? formatDateTime(loadCycle.swapped_at) : "Not available"}
+                    </td>
+                    <td className="px-3 py-3">{loadCycle.swapped_by?.name ?? "Not available"}</td>
+                    <td className="px-3 py-3">
+                      {loadCycle.warehouse_actual_count ?? "Not available"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {loadCycle.warehouse_confirmed_at
+                        ? formatDateTime(loadCycle.warehouse_confirmed_at)
+                        : "Not available"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {loadCycle.warehouse_confirmed_by?.name ?? "Not available"}
+                    </td>
+                    <td className="max-w-xs whitespace-normal px-3 py-3">
+                      {loadCycle.warehouse_notes ?? "Not available"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

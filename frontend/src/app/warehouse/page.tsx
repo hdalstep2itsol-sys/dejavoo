@@ -1,5 +1,5 @@
-import { RolePlaceholder } from "@/auth/RolePlaceholder";
+import { WarehouseLoadsPage } from "@/warehouse/WarehouseLoadsPage";
 
 export default function WarehousePage() {
-  return <RolePlaceholder role="warehouse_staff" />;
+  return <WarehouseLoadsPage />;
 }

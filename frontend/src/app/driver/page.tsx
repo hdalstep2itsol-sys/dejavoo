@@ -1,5 +1,5 @@
-import { RolePlaceholder } from "@/auth/RolePlaceholder";
+import { DriverRoutesPage } from "@/driver/DriverRoutesPage";
 
 export default function DriverPage() {
-  return <RolePlaceholder role="driver" />;
+  return <DriverRoutesPage />;
 }

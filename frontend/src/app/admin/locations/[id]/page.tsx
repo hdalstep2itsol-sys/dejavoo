@@ -153,7 +153,7 @@ export default function LocationDetailPage() {
                 />
               </section>
 
-              <TrailerLoadPanel location={location} />
+              <TrailerLoadPanel location={location} drivers={drivers} />
 
               <TerminalManager
                 locationId={location.id}

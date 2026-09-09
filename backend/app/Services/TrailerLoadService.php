@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\DriverCommitmentSource;
+use App\Enums\LocationRouteType;
 use App\Enums\TrailerLoadStatus;
 use App\Exceptions\ActiveTrailerLoadExistsException;
 use App\Models\Location;
@@ -16,7 +18,7 @@ class TrailerLoadService
     {
         try {
             return DB::transaction(function () use ($location, $createdBy, $startedAt) {
-                Location::query()
+                $lockedLocation = Location::query()
                     ->whereKey($location->getKey())
                     ->lockForUpdate()
                     ->firstOrFail();
@@ -25,11 +27,21 @@ class TrailerLoadService
                     throw new ActiveTrailerLoadExistsException;
                 }
 
+                $commitment = $lockedLocation->route_type === LocationRouteType::Dedicated
+                    ? [
+                        'committed_driver_id' => $lockedLocation->dedicated_driver_id,
+                        'commitment_source' => DriverCommitmentSource::Dedicated,
+                        'committed_at' => now(),
+                        'committed_by_user_id' => $createdBy->getKey(),
+                    ]
+                    : [];
+
                 return TrailerLoad::query()->create([
                     'location_id' => $location->getKey(),
                     'status' => TrailerLoadStatus::Active,
                     'started_at' => $startedAt,
                     'created_by_user_id' => $createdBy->getKey(),
+                    ...$commitment,
                 ]);
             }, 3);
         } catch (QueryException $exception) {

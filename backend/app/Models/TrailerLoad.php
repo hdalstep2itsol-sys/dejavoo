@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\DriverCommitmentSource;
 use App\Enums\TrailerLoadStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,16 @@ class TrailerLoad extends Model
         'status',
         'started_at',
         'created_by_user_id',
+        'committed_driver_id',
+        'commitment_source',
+        'committed_at',
+        'committed_by_user_id',
+        'swapped_at',
+        'swapped_by_user_id',
+        'warehouse_actual_count',
+        'warehouse_notes',
+        'warehouse_confirmed_at',
+        'warehouse_confirmed_by_user_id',
     ];
 
     protected function casts(): array
@@ -23,6 +34,11 @@ class TrailerLoad extends Model
         return [
             'status' => TrailerLoadStatus::class,
             'started_at' => 'datetime',
+            'commitment_source' => DriverCommitmentSource::class,
+            'committed_at' => 'datetime',
+            'swapped_at' => 'datetime',
+            'warehouse_actual_count' => 'integer',
+            'warehouse_confirmed_at' => 'datetime',
         ];
     }
 
@@ -34,5 +50,25 @@ class TrailerLoad extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function committedDriver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'committed_driver_id');
+    }
+
+    public function committedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'committed_by_user_id');
+    }
+
+    public function swappedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'swapped_by_user_id');
+    }
+
+    public function warehouseConfirmedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'warehouse_confirmed_by_user_id');
     }
 }
