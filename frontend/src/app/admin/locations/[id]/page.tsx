@@ -14,6 +14,7 @@ import { requestErrorMessage } from "@/locations/errors";
 import { LocationForm } from "@/locations/LocationForm";
 import { TerminalManager } from "@/locations/TerminalManager";
 import type { DriverOption, Location, LocationInput } from "@/locations/types";
+import { TrailerLoadPanel } from "@/trailer-loads/TrailerLoadPanel";
 
 export default function LocationDetailPage() {
   const params = useParams<{ id: string }>();
@@ -151,6 +152,8 @@ export default function LocationDetailPage() {
                   onSubmit={save}
                 />
               </section>
+
+              <TrailerLoadPanel location={location} />
 
               <TerminalManager
                 locationId={location.id}

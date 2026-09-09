@@ -63,4 +63,4 @@ Invoke-RestMethod http://localhost:8080/api/health
 Invoke-RestMethod http://localhost:3000/api/backend-health
 ```
 
-The application currently includes authentication, roles, locations, and Dejavoo terminal mappings. It does not include the FEED receiver, transaction processing, operational workflows, dashboards, forecasting, notifications, or reports.
+The application currently includes authentication, roles, locations, Dejavoo terminal mappings, and initial trailer/load initialization and history. It does not include the FEED receiver, transaction processing, trailer swaps, warehouse confirmation, dashboards, forecasting, notifications, or reports.

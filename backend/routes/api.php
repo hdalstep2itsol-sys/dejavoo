@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\DejavooTerminalController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\LocationController;
+use App\Http\Controllers\Api\Admin\TrailerLoadController;
 use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -41,4 +42,13 @@ Route::prefix('admin')
             ->name('admin.locations.terminals.update');
         Route::patch('/locations/{location}/terminals/{terminal}/status', [DejavooTerminalController::class, 'updateStatus'])
             ->name('admin.locations.terminals.status');
+
+        Route::get('/locations/{location}/trailer-loads/current', [TrailerLoadController::class, 'current'])
+            ->name('admin.locations.trailer-loads.current');
+        Route::get('/locations/{location}/trailer-loads', [TrailerLoadController::class, 'index'])
+            ->name('admin.locations.trailer-loads.index');
+        Route::post('/locations/{location}/trailer-loads', [TrailerLoadController::class, 'store'])
+            ->name('admin.locations.trailer-loads.store');
+        Route::get('/locations/{location}/trailer-loads/{trailerLoad}', [TrailerLoadController::class, 'show'])
+            ->name('admin.locations.trailer-loads.show');
     });

@@ -40,4 +40,9 @@ class Location extends Model
     {
         return $this->hasMany(DejavooTerminal::class);
     }
+
+    public function trailerLoads(): HasMany
+    {
+        return $this->hasMany(TrailerLoad::class);
+    }
 }
