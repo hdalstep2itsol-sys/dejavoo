@@ -4,9 +4,12 @@ namespace App\Models;
 
 use App\Enums\DriverCommitmentSource;
 use App\Enums\TrailerLoadStatus;
+use App\Services\NormalizedTransactionService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TrailerLoad extends Model
 {
@@ -70,5 +73,28 @@ class TrailerLoad extends Model
     public function warehouseConfirmedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'warehouse_confirmed_by_user_id');
+    }
+
+    public function normalizedTransactions(): HasMany
+    {
+        return $this->hasMany(NormalizedTransaction::class);
+    }
+
+    public function scopeWithCalculatedUnits(Builder $query): Builder
+    {
+        return $query->withSum('normalizedTransactions', 'unit_delta');
+    }
+
+    public function calculatedUnits(): string
+    {
+        $sum = array_key_exists('normalized_transactions_sum_unit_delta', $this->attributes)
+            ? $this->normalized_transactions_sum_unit_delta
+            : $this->normalizedTransactions()->sum('unit_delta');
+
+        return bcadd(
+            (string) ($sum ?? '0'),
+            '0',
+            NormalizedTransactionService::UNIT_SCALE,
+        );
     }
 }

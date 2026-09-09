@@ -45,4 +45,9 @@ class Location extends Model
     {
         return $this->hasMany(TrailerLoad::class);
     }
+
+    public function normalizedTransactions(): HasMany
+    {
+        return $this->hasMany(NormalizedTransaction::class);
+    }
 }

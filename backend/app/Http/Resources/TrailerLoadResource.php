@@ -14,15 +14,18 @@ class TrailerLoadResource extends JsonResource
             'location_id' => $this->location_id,
             'status' => $this->status->value,
             'started_at' => $this->started_at?->toIso8601String(),
+            'calculated_units' => $this->calculatedUnits(),
             'location' => $this->whenLoaded('location', fn () => [
                 'id' => $this->location->id,
                 'name' => $this->location->name,
                 'route_type' => $this->location->route_type->value,
+                'haul_threshold' => $this->location->haul_threshold,
             ]),
             'created_by' => $this->whenLoaded('createdBy', fn () => [
                 'id' => $this->createdBy->id,
                 'name' => $this->createdBy->name,
                 'email' => $this->createdBy->email,
+                'is_active' => (bool) $this->createdBy->is_active,
             ]),
             'committed_driver' => $this->whenLoaded(
                 'committedDriver',
@@ -31,6 +34,7 @@ class TrailerLoadResource extends JsonResource
                         'id' => $this->committedDriver->id,
                         'name' => $this->committedDriver->name,
                         'email' => $this->committedDriver->email,
+                        'is_active' => (bool) $this->committedDriver->is_active,
                     ]
                     : null,
             ),
@@ -43,6 +47,7 @@ class TrailerLoadResource extends JsonResource
                         'id' => $this->committedBy->id,
                         'name' => $this->committedBy->name,
                         'email' => $this->committedBy->email,
+                        'is_active' => (bool) $this->committedBy->is_active,
                     ]
                     : null,
             ),
@@ -54,6 +59,7 @@ class TrailerLoadResource extends JsonResource
                         'id' => $this->swappedBy->id,
                         'name' => $this->swappedBy->name,
                         'email' => $this->swappedBy->email,
+                        'is_active' => (bool) $this->swappedBy->is_active,
                     ]
                     : null,
             ),
@@ -67,6 +73,7 @@ class TrailerLoadResource extends JsonResource
                         'id' => $this->warehouseConfirmedBy->id,
                         'name' => $this->warehouseConfirmedBy->name,
                         'email' => $this->warehouseConfirmedBy->email,
+                        'is_active' => (bool) $this->warehouseConfirmedBy->is_active,
                     ]
                     : null,
             ),

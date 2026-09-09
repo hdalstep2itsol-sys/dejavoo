@@ -43,7 +43,12 @@ class UpdateLocationRequest extends FormRequest
                     default => $location->dedicated_driver_id,
                 };
 
-                $this->validateRouteAssignment($validator, $routeType, $driverId);
+                $this->validateRouteAssignment(
+                    $validator,
+                    $routeType,
+                    $driverId,
+                    $location->dedicated_driver_id,
+                );
             },
         ];
     }

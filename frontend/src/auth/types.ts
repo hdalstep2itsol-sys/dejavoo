@@ -5,6 +5,7 @@ export interface AuthenticatedUser {
   name: string;
   email: string;
   role: UserRole;
+  is_active: boolean;
 }
 
 export const roleHome: Record<UserRole, string> = {

@@ -95,6 +95,12 @@ export default function LocationDetailPage() {
     }
   }
 
+  const locationDrivers =
+    location?.dedicated_driver &&
+    !drivers.some((driver) => driver.id === location.dedicated_driver?.id)
+      ? [location.dedicated_driver, ...drivers]
+      : drivers;
+
   return (
     <ProtectedRoute allowedRole="owner_admin">
       <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-6 lg:px-8">
@@ -139,7 +145,7 @@ export default function LocationDetailPage() {
 
                 <LocationForm
                   key={location.updated_at}
-                  drivers={drivers}
+                  drivers={locationDrivers}
                   initialValue={{
                     name: location.name,
                     unit_price: location.unit_price,

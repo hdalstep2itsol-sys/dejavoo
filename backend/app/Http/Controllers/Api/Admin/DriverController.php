@@ -14,8 +14,9 @@ class DriverController extends Controller
     {
         $drivers = User::query()
             ->where('role', UserRole::Driver->value)
+            ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'email']);
+            ->get(['id', 'name', 'email', 'is_active']);
 
         return DriverResource::collection($drivers);
     }

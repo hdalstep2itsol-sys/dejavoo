@@ -19,7 +19,9 @@ class AssignTrailerLoadDriverRequest extends FormRequest
             'driver_id' => [
                 'required',
                 'integer',
-                Rule::exists('users', 'id')->where('role', UserRole::Driver->value),
+                Rule::exists('users', 'id')->where(fn ($query) => $query
+                    ->where('role', UserRole::Driver->value)
+                    ->where('is_active', true)),
             ],
         ];
     }

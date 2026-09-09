@@ -17,6 +17,7 @@ class TrailerLoadController extends Controller
     public function index(Location $location): AnonymousResourceCollection
     {
         $loads = $location->trailerLoads()
+            ->withCalculatedUnits()
             ->with($this->relations())
             ->orderByDesc('started_at')
             ->orderByDesc('id')
@@ -29,6 +30,7 @@ class TrailerLoadController extends Controller
     {
         $load = $location->trailerLoads()
             ->where('status', TrailerLoadStatus::Active->value)
+            ->withCalculatedUnits()
             ->with($this->relations())
             ->first();
 
@@ -51,14 +53,14 @@ class TrailerLoadController extends Controller
         );
 
         return (new TrailerLoadResource(
-            $load->load($this->relations()),
+            $load->load($this->relations())->loadSum('normalizedTransactions', 'unit_delta'),
         ))->response()->setStatusCode(201);
     }
 
     public function show(Location $location, TrailerLoad $trailerLoad): TrailerLoadResource
     {
         return new TrailerLoadResource(
-            $trailerLoad->load($this->relations()),
+            $trailerLoad->load($this->relations())->loadSum('normalizedTransactions', 'unit_delta'),
         );
     }
 
@@ -68,12 +70,12 @@ class TrailerLoadController extends Controller
     private function relations(): array
     {
         return [
-            'location:id,name,route_type,dedicated_driver_id',
-            'createdBy:id,name,email',
-            'committedDriver:id,name,email',
-            'committedBy:id,name,email',
-            'swappedBy:id,name,email',
-            'warehouseConfirmedBy:id,name,email',
+            'location:id,name,haul_threshold,route_type,dedicated_driver_id',
+            'createdBy:id,name,email,is_active',
+            'committedDriver:id,name,email,is_active',
+            'committedBy:id,name,email,is_active',
+            'swappedBy:id,name,email,is_active',
+            'warehouseConfirmedBy:id,name,email,is_active',
         ];
     }
 }

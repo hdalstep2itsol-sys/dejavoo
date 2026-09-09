@@ -17,7 +17,7 @@ class LocationController extends Controller
     public function index(): AnonymousResourceCollection
     {
         $locations = Location::query()
-            ->with('dedicatedDriver:id,name,email')
+            ->with('dedicatedDriver:id,name,email,is_active')
             ->withCount([
                 'terminals',
                 'terminals as active_terminals_count' => fn ($query) => $query->where('is_active', true),
@@ -74,7 +74,7 @@ class LocationController extends Controller
     private function loadLocation(Location $location): Location
     {
         return $location->refresh()
-            ->load(['dedicatedDriver:id,name,email', 'terminals'])
+            ->load(['dedicatedDriver:id,name,email,is_active', 'terminals'])
             ->loadCount([
                 'terminals',
                 'terminals as active_terminals_count' => fn ($query) => $query->where('is_active', true),

@@ -20,6 +20,10 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+function displayUnits(value: string): string {
+  return value.includes(".") ? value.replace(/0+$/, "").replace(/\.$/, "") : value;
+}
+
 export function WarehouseLoadsPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -163,11 +167,16 @@ export function WarehouseLoadsPage() {
                 <article key={load.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                   <h2 className="text-xl font-semibold">{load.location?.name}</h2>
                   <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                    <LoadDetail label="Driver who swapped" value={load.swapped_by?.name ?? "Not recorded"} />
+                    <LoadDetail
+                      label="Driver who swapped"
+                      value={load.swapped_by
+                        ? `${load.swapped_by.name}${load.swapped_by.is_active ? "" : " (Inactive)"}`
+                        : "Not recorded"}
+                    />
                     <LoadDetail label="Swapped" value={formatDateTime(load.swapped_at)} />
                     <LoadDetail label="Load started" value={formatDateTime(load.started_at)} />
                     <LoadDetail label="Status" value="Pending warehouse count" />
-                    <LoadDetail label="Calculated units" value="Not available yet" />
+                    <LoadDetail label="Calculated units" value={displayUnits(load.calculated_units)} />
                   </dl>
 
                   {selectedLoadId === load.id ? (

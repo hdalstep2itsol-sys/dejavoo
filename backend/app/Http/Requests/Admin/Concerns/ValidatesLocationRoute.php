@@ -13,6 +13,7 @@ trait ValidatesLocationRoute
         Validator $validator,
         ?string $routeType,
         mixed $driverId,
+        ?int $existingDriverId = null,
     ): void {
         if ($routeType === LocationRouteType::Open->value && $driverId !== null) {
             $validator->errors()->add(
@@ -40,15 +41,20 @@ trait ValidatesLocationRoute
             return;
         }
 
+        if ($existingDriverId !== null && (int) $driverId === $existingDriverId) {
+            return;
+        }
+
         $isDriver = User::query()
             ->whereKey($driverId)
             ->where('role', UserRole::Driver->value)
+            ->where('is_active', true)
             ->exists();
 
         if (! $isDriver) {
             $validator->errors()->add(
                 'dedicated_driver_id',
-                'The selected user must have the driver role.',
+                'The selected user must be an active Driver.',
             );
         }
     }

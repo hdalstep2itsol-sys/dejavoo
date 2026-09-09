@@ -54,12 +54,20 @@ export function RolePlaceholder({ role }: { role: UserRole }) {
             Authentication is working. Application dashboard features are not implemented yet.
           </p>
           {role === "owner_admin" && (
-            <Link
-              href="/admin/locations"
-              className="mt-6 inline-flex rounded-lg border border-cyan-700 px-4 py-2.5 font-semibold text-cyan-300 hover:bg-cyan-950"
-            >
-              Manage locations
-            </Link>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href="/admin/locations"
+                className="inline-flex rounded-lg border border-cyan-700 px-4 py-2.5 font-semibold text-cyan-300 hover:bg-cyan-950"
+              >
+                Manage locations
+              </Link>
+              <Link
+                href="/admin/users"
+                className="inline-flex rounded-lg border border-cyan-700 px-4 py-2.5 font-semibold text-cyan-300 hover:bg-cyan-950"
+              >
+                Manage users
+              </Link>
+            </div>
           )}
           {error && (
             <p role="alert" className="mt-4 rounded-lg bg-red-950 px-3 py-2 text-sm text-red-200">

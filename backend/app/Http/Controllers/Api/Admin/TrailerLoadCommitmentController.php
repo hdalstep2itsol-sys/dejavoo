@@ -41,12 +41,12 @@ class TrailerLoadCommitmentController extends Controller
     private function loadRelations(TrailerLoad $load): TrailerLoad
     {
         return $load->load([
-            'location:id,name,route_type,dedicated_driver_id',
-            'createdBy:id,name,email',
-            'committedDriver:id,name,email',
-            'committedBy:id,name,email',
-            'swappedBy:id,name,email',
-            'warehouseConfirmedBy:id,name,email',
-        ]);
+            'location:id,name,haul_threshold,route_type,dedicated_driver_id',
+            'createdBy:id,name,email,is_active',
+            'committedDriver:id,name,email,is_active',
+            'committedBy:id,name,email,is_active',
+            'swappedBy:id,name,email,is_active',
+            'warehouseConfirmedBy:id,name,email,is_active',
+        ])->loadSum('normalizedTransactions', 'unit_delta');
     }
 }

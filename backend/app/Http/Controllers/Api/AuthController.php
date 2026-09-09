@@ -15,7 +15,10 @@ class AuthController extends Controller
 {
     public function login(LoginRequest $request): JsonResponse
     {
-        if (! Auth::guard('web')->attempt($request->validated())) {
+        if (! Auth::guard('web')->attempt([
+            ...$request->validated(),
+            'is_active' => true,
+        ])) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -46,7 +49,7 @@ class AuthController extends Controller
     }
 
     /**
-     * @return array{id: int, name: string, email: string, role: string}
+     * @return array{id: int, name: string, email: string, role: string, is_active: bool}
      */
     private function userData(User $user): array
     {
@@ -55,6 +58,7 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role->value,
+            'is_active' => $user->is_active,
         ];
     }
 }

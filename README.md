@@ -39,7 +39,15 @@ The development-only accounts are:
 
 All three use the password supplied through `DEV_TEST_USER_PASSWORD`. The seeder refuses to run outside the local environment.
 
-After signing in as Owner/Admin, location and Dejavoo terminal mapping administration is available at `http://localhost:3000/admin/locations`.
+After signing in as Owner/Admin, user management is available at `http://localhost:3000/admin/users`. Location and Dejavoo terminal mapping administration is available at `http://localhost:3000/admin/locations`.
+
+To create deterministic normalized SALE, REFUND, and VOID samples for an existing trailer/load, run:
+
+```powershell
+docker compose exec -T backend php artisan dejavoo:seed-normalized-transactions
+```
+
+This command is development-only, is safe to rerun, and refuses to run outside Laravel's `local` environment. It does not create or use real Dejavoo identifiers.
 
 ## Stop
 
@@ -63,4 +71,4 @@ Invoke-RestMethod http://localhost:8080/api/health
 Invoke-RestMethod http://localhost:3000/api/backend-health
 ```
 
-The application currently includes authentication, roles, locations, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, and warehouse confirmation. It does not include the FEED receiver, transaction processing, calculated mattress units, dashboards, forecasting, notifications, or reports.
+The application currently includes authentication, role-based user administration, locations, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, warehouse confirmation, and provider-independent normalized transaction/unit calculations. It does not include the FEED receiver, raw provider amount mapping, dashboards, forecasting, notifications, or reports.

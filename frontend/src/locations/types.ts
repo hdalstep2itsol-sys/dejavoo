@@ -4,6 +4,7 @@ export interface DriverOption {
   id: number;
   name: string;
   email: string;
+  is_active: boolean;
 }
 
 export interface TerminalMapping {

@@ -3,8 +3,10 @@
 use App\Http\Controllers\Api\Admin\DejavooTerminalController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\LocationController;
+use App\Http\Controllers\Api\Admin\NormalizedTransactionController;
 use App\Http\Controllers\Api\Admin\TrailerLoadCommitmentController;
 use App\Http\Controllers\Api\Admin\TrailerLoadController;
+use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Driver\TrailerLoadController as DriverTrailerLoadController;
 use App\Http\Controllers\Api\Warehouse\TrailerLoadController as WarehouseTrailerLoadController;
@@ -23,16 +25,23 @@ Route::prefix('auth')->group(function () {
         ->name('auth.login');
 
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/user', [AuthController::class, 'current'])->name('auth.user');
+        Route::get('/user', [AuthController::class, 'current'])
+            ->middleware('active')
+            ->name('auth.user');
         Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
     });
 });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:owner_admin'])
+    ->middleware(['auth:sanctum', 'active', 'role:owner_admin'])
     ->scopeBindings()
     ->group(function () {
         Route::get('/drivers', [DriverController::class, 'index'])->name('admin.drivers.index');
+
+        Route::apiResource('users', UserController::class)
+            ->only(['index', 'store', 'show', 'update']);
+        Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])
+            ->name('admin.users.status');
 
         Route::apiResource('locations', LocationController::class)
             ->only(['index', 'store', 'show', 'update']);
@@ -54,6 +63,8 @@ Route::prefix('admin')
             ->name('admin.locations.trailer-loads.store');
         Route::get('/locations/{location}/trailer-loads/{trailerLoad}', [TrailerLoadController::class, 'show'])
             ->name('admin.locations.trailer-loads.show');
+        Route::get('/locations/{location}/trailer-loads/{trailerLoad}/transactions', [NormalizedTransactionController::class, 'index'])
+            ->name('admin.locations.trailer-loads.transactions.index');
         Route::get('/locations/{location}/trailer-loads/{trailerLoad}/commitment', [TrailerLoadCommitmentController::class, 'show'])
             ->name('admin.locations.trailer-loads.commitment.show');
         Route::put('/locations/{location}/trailer-loads/{trailerLoad}/commitment', [TrailerLoadCommitmentController::class, 'update'])
@@ -63,7 +74,7 @@ Route::prefix('admin')
     });
 
 Route::prefix('driver')
-    ->middleware(['auth:sanctum', 'role:driver'])
+    ->middleware(['auth:sanctum', 'active', 'role:driver'])
     ->group(function () {
         Route::get('/trailer-loads', [DriverTrailerLoadController::class, 'index'])
             ->name('driver.trailer-loads.index');
@@ -76,7 +87,7 @@ Route::prefix('driver')
     });
 
 Route::prefix('warehouse')
-    ->middleware(['auth:sanctum', 'role:warehouse_staff'])
+    ->middleware(['auth:sanctum', 'active', 'role:warehouse_staff'])
     ->group(function () {
         Route::get('/trailer-loads', [WarehouseTrailerLoadController::class, 'index'])
             ->name('warehouse.trailer-loads.index');

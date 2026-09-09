@@ -110,8 +110,8 @@ export function LocationForm({
           >
             <option value="">Select a driver</option>
             {drivers.map((driver) => (
-              <option key={driver.id} value={driver.id}>
-                {driver.name} ({driver.email})
+              <option key={driver.id} value={driver.id} disabled={!driver.is_active}>
+                {driver.name} ({driver.email}){driver.is_active ? "" : " - Inactive"}
               </option>
             ))}
           </select>

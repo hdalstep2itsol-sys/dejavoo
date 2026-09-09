@@ -16,6 +16,7 @@ class TrailerLoadController extends Controller
     {
         $loads = TrailerLoad::query()
             ->where('status', TrailerLoadStatus::PendingWarehouseCount->value)
+            ->withCalculatedUnits()
             ->with($this->relations())
             ->orderBy('swapped_at')
             ->orderBy('id')
@@ -31,7 +32,10 @@ class TrailerLoadController extends Controller
             404,
         );
 
-        return new TrailerLoadResource($trailerLoad->load($this->relations()));
+        return new TrailerLoadResource(
+            $trailerLoad->load($this->relations())
+                ->loadSum('normalizedTransactions', 'unit_delta'),
+        );
     }
 
     public function confirm(
@@ -55,12 +59,12 @@ class TrailerLoadController extends Controller
     private function relations(): array
     {
         return [
-            'location:id,name,route_type,dedicated_driver_id',
-            'createdBy:id,name,email',
-            'committedDriver:id,name,email',
-            'committedBy:id,name,email',
-            'swappedBy:id,name,email',
-            'warehouseConfirmedBy:id,name,email',
+            'location:id,name,haul_threshold,route_type,dedicated_driver_id',
+            'createdBy:id,name,email,is_active',
+            'committedDriver:id,name,email,is_active',
+            'committedBy:id,name,email,is_active',
+            'swappedBy:id,name,email,is_active',
+            'warehouseConfirmedBy:id,name,email,is_active',
         ];
     }
 }

@@ -47,8 +47,8 @@ class TrailerLoadCommitmentService
 
     public function assign(TrailerLoad $load, User $driver, User $performedBy): TrailerLoad
     {
-        if ($driver->role !== UserRole::Driver) {
-            throw new TrailerLoadCommitmentException('Only a Driver user can be committed to a load.');
+        if ($driver->role !== UserRole::Driver || ! $driver->is_active) {
+            throw new TrailerLoadCommitmentException('Only an active Driver user can be committed to a load.');
         }
 
         return DB::transaction(function () use ($load, $driver, $performedBy) {
@@ -105,12 +105,13 @@ class TrailerLoadCommitmentService
     private function loadRelations(TrailerLoad $load): TrailerLoad
     {
         return $load->refresh()->load([
-            'location.dedicatedDriver:id,name,email',
-            'createdBy:id,name,email',
-            'committedDriver:id,name,email',
-            'committedBy:id,name,email',
-            'swappedBy:id,name,email',
-            'warehouseConfirmedBy:id,name,email',
-        ]);
+            'location:id,name,haul_threshold,route_type,dedicated_driver_id',
+            'location.dedicatedDriver:id,name,email,is_active',
+            'createdBy:id,name,email,is_active',
+            'committedDriver:id,name,email,is_active',
+            'committedBy:id,name,email,is_active',
+            'swappedBy:id,name,email,is_active',
+            'warehouseConfirmedBy:id,name,email,is_active',
+        ])->loadSum('normalizedTransactions', 'unit_delta');
     }
 }

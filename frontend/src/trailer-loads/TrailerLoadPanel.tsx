@@ -12,6 +12,7 @@ import {
 } from "./api";
 import type { TrailerLoad, TrailerLoadStatus } from "./types";
 import { requestErrorMessage } from "@/locations/errors";
+import { LoadTransactions } from "@/transactions/LoadTransactions";
 
 const statusLabels: Record<TrailerLoadStatus, string> = {
   active: "Active",
@@ -26,12 +27,22 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+function userName(user: { name: string; is_active: boolean } | null | undefined, fallback: string): string {
+  if (!user) return fallback;
+
+  return `${user.name}${user.is_active ? "" : " (Inactive)"}`;
+}
+
 import type { DriverOption } from "@/locations/types";
 
 const commitmentLabels = {
   dedicated: "Dedicated",
   open_claim: "Open claim",
 };
+
+function displayUnits(value: string): string {
+  return value.includes(".") ? value.replace(/0+$/, "").replace(/\.$/, "") : value;
+}
 
 export function TrailerLoadPanel({
   location,
@@ -47,6 +58,7 @@ export function TrailerLoadPanel({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [transactionLoadId, setTransactionLoadId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -169,15 +181,16 @@ export function TrailerLoadPanel({
           <LoadDetail label="Status" value={statusLabels[currentLoad.status]} />
           <LoadDetail label="Started" value={formatDateTime(currentLoad.started_at)} />
           <LoadDetail label="Location" value={location.name} />
-          <LoadDetail label="Current units" value="Not available yet" />
+          <LoadDetail label="Calculated units" value={displayUnits(currentLoad.calculated_units)} />
+          <LoadDetail label="Threshold" value={location.haul_threshold} />
           <LoadDetail label="Route type" value={location.route_type === "open" ? "Open" : "Dedicated"} />
           <LoadDetail
             label="Dedicated driver"
-            value={location.dedicated_driver?.name ?? "Not applicable"}
+            value={userName(location.dedicated_driver, "Not applicable")}
           />
           <LoadDetail
             label="Committed driver"
-            value={currentLoad.committed_driver?.name ?? "Not committed"}
+            value={userName(currentLoad.committed_driver, "Not committed")}
           />
           <LoadDetail
             label="Commitment source"
@@ -275,6 +288,16 @@ export function TrailerLoadPanel({
         </form>
       )}
 
+      {!loading && currentLoad && (
+        <button
+          type="button"
+          onClick={() => setTransactionLoadId(currentLoad.id)}
+          className="mt-4 text-sm font-semibold text-cyan-300"
+        >
+          View current load transactions
+        </button>
+      )}
+
       {error && (
         <p role="alert" className="mt-4 rounded-lg bg-red-950 px-4 py-3 text-red-200">
           {error}
@@ -292,12 +315,14 @@ export function TrailerLoadPanel({
                 <tr>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Status</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Started</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Calculated units</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Swapped</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Swapped by</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Actual count</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Confirmed</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Confirmed by</th>
                   <th className="border-b border-slate-800 px-3 py-2 font-medium">Notes</th>
+                  <th className="border-b border-slate-800 px-3 py-2 font-medium">Transactions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -305,10 +330,11 @@ export function TrailerLoadPanel({
                   <tr key={loadCycle.id}>
                     <td className="px-3 py-3">{statusLabels[loadCycle.status]}</td>
                     <td className="px-3 py-3">{formatDateTime(loadCycle.started_at)}</td>
+                    <td className="px-3 py-3">{displayUnits(loadCycle.calculated_units)}</td>
                     <td className="px-3 py-3">
                       {loadCycle.swapped_at ? formatDateTime(loadCycle.swapped_at) : "Not available"}
                     </td>
-                    <td className="px-3 py-3">{loadCycle.swapped_by?.name ?? "Not available"}</td>
+                    <td className="px-3 py-3">{userName(loadCycle.swapped_by, "Not available")}</td>
                     <td className="px-3 py-3">
                       {loadCycle.warehouse_actual_count ?? "Not available"}
                     </td>
@@ -318,10 +344,19 @@ export function TrailerLoadPanel({
                         : "Not available"}
                     </td>
                     <td className="px-3 py-3">
-                      {loadCycle.warehouse_confirmed_by?.name ?? "Not available"}
+                      {userName(loadCycle.warehouse_confirmed_by, "Not available")}
                     </td>
                     <td className="max-w-xs whitespace-normal px-3 py-3">
                       {loadCycle.warehouse_notes ?? "Not available"}
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setTransactionLoadId(loadCycle.id)}
+                        className="font-semibold text-cyan-300"
+                      >
+                        View
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -330,6 +365,15 @@ export function TrailerLoadPanel({
           </div>
         )}
       </div>
+
+      {transactionLoadId !== null && (
+        <LoadTransactions
+          key={transactionLoadId}
+          locationId={location.id}
+          loadId={transactionLoadId}
+          onClose={() => setTransactionLoadId(null)}
+        />
+      )}
     </section>
   );
 }

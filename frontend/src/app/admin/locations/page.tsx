@@ -152,6 +152,14 @@ export default function LocationsPage() {
                         <div><dt className="text-slate-500">Unit price</dt><dd>{money(location.unit_price)}</dd></div>
                         <div><dt className="text-slate-500">Threshold</dt><dd>{location.haul_threshold}</dd></div>
                         <div><dt className="text-slate-500">Route</dt><dd className="capitalize">{location.route_type}</dd></div>
+                        <div>
+                          <dt className="text-slate-500">Dedicated driver</dt>
+                          <dd>
+                            {location.dedicated_driver
+                              ? `${location.dedicated_driver.name}${location.dedicated_driver.is_active ? "" : " (Inactive)"}`
+                              : "—"}
+                          </dd>
+                        </div>
                         <div><dt className="text-slate-500">Terminals</dt><dd>{location.terminal_summary.active}/{location.terminal_summary.total} active</dd></div>
                       </dl>
                       <button
@@ -185,7 +193,11 @@ export default function LocationsPage() {
                           <td className="px-4 py-4">{money(location.unit_price)}</td>
                           <td className="px-4 py-4">{location.haul_threshold}</td>
                           <td className="px-4 py-4 capitalize">{location.route_type}</td>
-                          <td className="px-4 py-4">{location.dedicated_driver?.name ?? '—'}</td>
+                          <td className="px-4 py-4">
+                            {location.dedicated_driver
+                              ? `${location.dedicated_driver.name}${location.dedicated_driver.is_active ? "" : " (Inactive)"}`
+                              : "—"}
+                          </td>
                           <td className="px-4 py-4">{location.terminal_summary.active}/{location.terminal_summary.total} active</td>
                           <td className="px-4 py-4"><Status active={location.is_active} /></td>
                           <td className="px-4 py-4">
