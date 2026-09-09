@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\LoadHistoryRequest;
 use App\Http\Resources\TrailerLoadResource;
 use App\Models\Location;
 use App\Models\TrailerLoad;
+use App\Services\TrailerLoadReportService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,26 +97,19 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function history(LoadHistoryRequest $request): JsonResponse
-    {
-        $query = $this->loadQuery()
-            ->whereIn('status', [
+    public function history(
+        LoadHistoryRequest $request,
+        TrailerLoadReportService $reports,
+    ): JsonResponse {
+        $query = $reports->query(
+            $request->validated(),
+            [
                 TrailerLoadStatus::PendingWarehouseCount->value,
                 TrailerLoadStatus::Completed->value,
-            ]);
+            ],
+        );
 
-        if ($request->filled('location_id')) {
-            $query->where('location_id', $request->integer('location_id'));
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->validated('status'));
-        }
-
-        $loads = $query
-            ->orderByDesc('swapped_at')
-            ->orderByDesc('id')
-            ->get();
+        $loads = $query->get();
 
         $locations = Location::query()
             ->whereHas('trailerLoads', fn (Builder $loadQuery) => $loadQuery->whereIn('status', [

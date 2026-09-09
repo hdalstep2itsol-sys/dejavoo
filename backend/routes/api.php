@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Admin\NormalizedTransactionController;
 use App\Http\Controllers\Api\Admin\TrailerLoadAdjustmentController;
 use App\Http\Controllers\Api\Admin\TrailerLoadCommitmentController;
 use App\Http\Controllers\Api\Admin\TrailerLoadController;
+use App\Http\Controllers\Api\Admin\TrailerLoadReportController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Driver\TrailerLoadController as DriverTrailerLoadController;
@@ -45,6 +46,12 @@ Route::prefix('admin')
             ->name('admin.warehouse-pending');
         Route::get('/load-history', [DashboardController::class, 'history'])
             ->name('admin.load-history');
+        Route::get('/reports', [TrailerLoadReportController::class, 'index'])
+            ->name('admin.reports.index');
+        Route::get('/reports/export/csv', [TrailerLoadReportController::class, 'csv'])
+            ->name('admin.reports.csv');
+        Route::get('/reports/export/xlsx', [TrailerLoadReportController::class, 'xlsx'])
+            ->name('admin.reports.xlsx');
 
         Route::get('/drivers', [DriverController::class, 'index'])->name('admin.drivers.index');
 
