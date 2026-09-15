@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Driver\TrailerLoadController as DriverTrailerLoadController;
 use App\Http\Controllers\Api\Warehouse\TrailerLoadController as WarehouseTrailerLoadController;
+use App\Http\Controllers\Api\Webhooks\IpospaysFeedController;
+use App\Http\Middleware\VerifyIpospaysFeedHmac;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -22,6 +24,10 @@ Route::get('/health', function () {
         'service' => 'dejavoo-backend',
     ]);
 });
+
+Route::post('/webhooks/ipospays/feed', IpospaysFeedController::class)
+    ->middleware(VerifyIpospaysFeedHmac::class)
+    ->name('webhooks.ipospays.feed');
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])

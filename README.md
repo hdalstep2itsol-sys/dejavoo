@@ -71,6 +71,47 @@ docker compose exec -T backend php artisan dejavoo:seed-normalized-transactions
 
 This command is development-only, is safe to rerun, and refuses to run outside Laravel's `local` environment. It does not create or use real Dejavoo identifiers.
 
+## iPOSpays FEED foundation
+
+The single public webhook endpoint is:
+
+```text
+POST /api/webhooks/ipospays/feed
+```
+
+For the deployed application, its URL is `https://hub.springbackrecyclingtn.com/api/webhooks/ipospays/feed`. The route is deliberately outside Sanctum and is excluded from SPA CSRF checks only for this exact path. It is protected by dedicated HMAC middleware.
+
+The provider documentation indicates HMAC-SHA512 with lowercase hexadecimal output, a JSON `signature` field excluded from signing, and field-based canonicalization. Its published examples contain unresolved case-sensitive field and timestamp inconsistencies, so no production canonicalization algorithm or payload mapping has been guessed. The endpoint therefore remains disabled and fail-closed: it cannot accept a transaction until both a confirmed HMAC profile and a confirmed mapping profile are implemented. If HMAC is finalized before mapping, an authenticated unmappable delivery creates only a metadata-only `pending_provider_mapping` receipt (internal ID, status, error category, count, and timestamps); no provider values or raw payload are retained.
+
+Configure these backend runtime variables without committing their values:
+
+```dotenv
+IPOSPAYS_FEED_ENABLED=false
+IPOSPAYS_FEED_HMAC_SECRET=
+IPOSPAYS_FEED_HMAC_PROFILE=unfinalized
+IPOSPAYS_FEED_MAPPING_PROFILE=unfinalized
+IPOSPAYS_FEED_MAX_PAYLOAD_BYTES=262144
+```
+
+Before activation, obtain from Dejavoo/iPOSpays:
+
+- A real signed payload/test vector and the exact ordered field-based canonicalization rules, including null, missing-field, whitespace, encoding, nested-field, and number formatting behavior.
+- Authoritative case-sensitive payload field names, especially `termId`/`TermId`, `mid`/`Mid`, transaction date/time, and L2/L3 fields.
+- The provider event/request identifier and transaction identifier fields, plus initial/update delivery behavior.
+- The correct business amount (`amount` versus `baseAmount`), SALE/REFUND/VOID values and sign rules.
+- The authoritative transaction timestamp, timezone, acknowledgement body/status, and retry/burst contract.
+
+Once those items are confirmed, add a named implementation of `IpospaysFeedHmacProfile`, register it with `IpospaysFeedHmacVerifier`, add the matching isolated payload mapper, verify both with the provider's signed test vector, configure the two profile names and secret, and only then set `IPOSPAYS_FEED_ENABLED=true`. Unknown, inactive, or conflicting terminal mappings remain non-processing outcomes, and normalized transactions continue to use the existing `(source, external_transaction_id)` uniqueness guard with source `ipospays_feed`.
+
+Safe local checks that do not require or reveal a real key:
+
+```powershell
+docker compose exec -T backend php artisan test --filter=IpospaysFeedWebhookTest
+curl.exe -i -X POST http://localhost:8080/api/webhooks/ipospays/feed -H "Content-Type: application/json" -d "{}"
+```
+
+The request above must return a non-2xx `hmac_signature_missing` response. Do not place a real HMAC secret, signature, canonical string, or provider payload in source files, command history, logs, or test fixtures.
+
 ## Stop
 
 ```powershell
@@ -93,4 +134,4 @@ Invoke-RestMethod http://localhost:8080/api/health
 Invoke-RestMethod http://localhost:3000/api/backend-health
 ```
 
-The application currently includes authentication, role-based user administration, locations with effective-dated price history, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, warehouse confirmation, provider-independent normalized transaction calculations, append-only manual unit adjustments, operational dashboards, and Owner/Admin reports. It does not include the FEED receiver, raw provider amount mapping, forecasting, or notifications.
+The application currently includes authentication, role-based user administration, locations with effective-dated price history, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, warehouse confirmation, provider-independent normalized transaction calculations, append-only manual unit adjustments, operational dashboards, Owner/Admin reports, and the fail-closed FEED receipt/processing foundation described above. It does not yet accept real FEED transactions or implement provider amount/timestamp/type mapping, forecasting, or notifications.
