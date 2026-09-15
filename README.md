@@ -17,27 +17,47 @@ Open the frontend at `http://localhost:3000`. The Laravel health endpoint is ava
 
 MySQL is available from the host only at `127.0.0.1:3306`; containers continue to reach it as `mysql:3306`.
 
-## Development users
+## Demo data
 
-No public registration endpoint is provided. To create one local test user for each role, set a unique password of at least 12 characters in the root `.env`:
+No public registration endpoint is provided. To prepare the complete UI demo locally or in a deployed testing environment, set `DEV_TEST_USER_PASSWORD` to a unique password of at least 12 characters. For local Docker, set it in the root `.env`:
 
 ```dotenv
-DEV_TEST_USER_PASSWORD=replace-with-a-local-only-password
+DEV_TEST_USER_PASSWORD=replace-with-a-demo-only-password
 ```
+
+If the Docker stack was already running when this value changed, refresh the backend container with `docker compose up -d --force-recreate backend` before seeding.
 
 Then run:
 
 ```powershell
-docker compose exec -T backend php artisan db:seed --class=DevelopmentUserSeeder
+docker compose exec -T backend php artisan dejavoo:seed-demo
 ```
 
-The development-only accounts are:
+The demo accounts are:
 
-- `owner.admin@example.test` → `http://localhost:3000/admin`
-- `driver@example.test` → `http://localhost:3000/driver`
-- `warehouse@example.test` → `http://localhost:3000/warehouse`
+- Owner/Admin: `owner.admin@example.test`
+- Drivers: `mike.driver@example.test`, `john.driver@example.test`, `sarah.driver@example.test`
+- Inactive Driver: `inactive.driver@example.test` (cannot log in)
+- Warehouse: `warehouse@example.test`, `warehouse.two@example.test`
 
-All three use the password supplied through `DEV_TEST_USER_PASSWORD`. The seeder refuses to run outside the local environment.
+All active accounts use the password supplied through `DEV_TEST_USER_PASSWORD`. The command works in local, deployed, and production-mode Laravel environments; a missing or short password causes it to fail without seeding. It creates deterministic demo-only locations, fake terminal identifiers, active/pending/completed loads, normalized transactions, manual adjustments, and warehouse confirmations. Active/inactive location and terminal states are UI test scenarios only and are not statements about production operations.
+
+Sign in at `http://localhost:3000/login`. Successful login routes Owner/Admin to `/admin`, Drivers to `/driver`, and Warehouse Staff to `/warehouse`.
+
+After manually testing claims, swaps, or warehouse confirmations, restore the known demo dataset with:
+
+```powershell
+docker compose exec -T backend php artisan dejavoo:seed-demo --reset
+```
+
+The seeder refuses to take ownership of an existing same-name location unless it already carries its exact demo terminal marker. Reset removes only marked demo-location data and refuses to proceed if unexpected terminals, transactions, adjustments, or price-history records have been added to those locations. It never deletes migration/system tables or unrelated locations.
+
+On a deployed server, configure `DEV_TEST_USER_PASSWORD` in the backend runtime environment and run from the deployed backend directory:
+
+```bash
+php artisan dejavoo:seed-demo
+php artisan dejavoo:seed-demo --reset
+```
 
 After signing in as Owner/Admin, user management is available at `http://localhost:3000/admin/users`. Location and Dejavoo terminal mapping administration is available at `http://localhost:3000/admin/locations`.
 
@@ -73,4 +93,4 @@ Invoke-RestMethod http://localhost:8080/api/health
 Invoke-RestMethod http://localhost:3000/api/backend-health
 ```
 
-The application currently includes authentication, role-based user administration, locations with effective-dated price history, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, warehouse confirmation, provider-independent normalized transaction calculations, and append-only manual unit adjustments. It does not include the FEED receiver, raw provider amount mapping, dashboards, forecasting, notifications, or reports.
+The application currently includes authentication, role-based user administration, locations with effective-dated price history, Dejavoo terminal mappings, trailer/load initialization, driver commitments, trailer swaps, warehouse confirmation, provider-independent normalized transaction calculations, append-only manual unit adjustments, operational dashboards, and Owner/Admin reports. It does not include the FEED receiver, raw provider amount mapping, forecasting, or notifications.
