@@ -13,6 +13,7 @@ use App\Models\Location;
 use App\Models\NormalizedTransaction;
 use App\Models\TrailerLoad;
 use App\Models\User;
+use App\Services\IpospaysFeedDiagnosticObserver;
 use App\Services\IpospaysFeedProcessor;
 use App\Services\IpospaysTerminalResolver;
 use App\Services\LocationPriceService;
@@ -38,6 +39,7 @@ class IpospaysFeedWebhookTest extends TestCase
 
         CarbonImmutable::setTestNow('2026-09-15 00:00:00');
         config()->set('ipospays.feed.enabled', false);
+        config()->set('ipospays.feed.diagnostic_mode', false);
         config()->set('ipospays.feed.hmac_secret');
         config()->set('ipospays.feed.hmac_profile', 'unfinalized');
         config()->set('ipospays.feed.mapping_profile', 'unfinalized');
@@ -81,6 +83,54 @@ class IpospaysFeedWebhookTest extends TestCase
 
         $this->assertDatabaseCount('ipospays_feed_events', 0);
         $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_diagnostic_observation_happens_before_unsigned_request_is_rejected(): void
+    {
+        config()->set('ipospays.feed.diagnostic_mode', true);
+        $diagnostics = Mockery::mock(IpospaysFeedDiagnosticObserver::class);
+        $diagnostics->shouldReceive('observe')
+            ->once()
+            ->withArgs(fn ($request, string $rawBody): bool => $rawBody === '{}')
+            ->andReturn('observation-1');
+        $diagnostics->shouldReceive('recordOutcome')
+            ->once()
+            ->with('observation-1', 'signature_missing');
+        $this->app->instance(IpospaysFeedDiagnosticObserver::class, $diagnostics);
+
+        $this->postRaw('{}')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'hmac_signature_missing');
+
+        $this->assertDatabaseCount('ipospays_feed_events', 0);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_diagnostic_mode_does_not_bypass_unfinalized_profile_or_change_units(): void
+    {
+        config()->set('ipospays.feed.diagnostic_mode', true);
+        config()->set('ipospays.feed.enabled', true);
+        config()->set('ipospays.feed.hmac_secret', 'test-secret-that-is-never-logged');
+        [$location] = $this->operationalTerminal(['tpn' => 'TPN-DIAGNOSTIC']);
+        $load = $this->activeLoad($location);
+        $diagnostics = Mockery::mock(IpospaysFeedDiagnosticObserver::class);
+        $diagnostics->shouldReceive('observe')->once()->andReturn('observation-2');
+        $diagnostics->shouldReceive('recordOutcome')
+            ->once()
+            ->with('observation-2', 'provider_profile_unfinalized');
+        $this->app->instance(IpospaysFeedDiagnosticObserver::class, $diagnostics);
+
+        $this->postRaw(json_encode([
+            'signature' => 'provider-signature',
+            'tpn' => 'TPN-DIAGNOSTIC',
+            'amount' => '20.00',
+        ], JSON_THROW_ON_ERROR))
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'hmac_profile_unfinalized');
+
+        $this->assertDatabaseCount('ipospays_feed_events', 0);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+        $this->assertSame('0.00000000', $load->refresh()->operationalUnits());
     }
 
     public function test_malformed_json_is_rejected(): void

@@ -87,6 +87,7 @@ Configure these backend runtime variables without committing their values:
 
 ```dotenv
 IPOSPAYS_FEED_ENABLED=false
+IPOSPAYS_FEED_DIAGNOSTIC_MODE=false
 IPOSPAYS_FEED_HMAC_SECRET=
 IPOSPAYS_FEED_HMAC_PROFILE=unfinalized
 IPOSPAYS_FEED_MAPPING_PROFILE=unfinalized
@@ -111,6 +112,23 @@ curl.exe -i -X POST http://localhost:8080/api/webhooks/ipospays/feed -H "Content
 ```
 
 The request above must return a non-2xx `hmac_signature_missing` response. Do not place a real HMAC secret, signature, canonical string, or provider payload in source files, command history, logs, or test fixtures.
+
+### Temporary FEED diagnostics
+
+Setting `IPOSPAYS_FEED_DIAGNOSTIC_MODE=true` observes connection attempts on the existing exact FEED endpoint before HMAC rejection. It does not bypass authentication, return a success response, map provider transactions, or update operational units. `IPOSPAYS_FEED_ENABLED` may remain `false` while diagnostics are active.
+
+The dedicated 14-day rotating log is written as `storage/logs/ipospays-feed-YYYY-MM-DD.log`. It contains an internal observation ID, timestamps, method, path, content type/length, capped User-Agent, capped header names, JSON parse state, capped top-level field names and nested key paths up to depth three, top-level signature presence, truncation indicators, and the fail-closed authentication outcome. It never contains header values, payload values, the raw body, the signature value, or the HMAC secret.
+
+On the deployed server:
+
+1. Set `IPOSPAYS_FEED_DIAGNOSTIC_MODE=true` and the provided `IPOSPAYS_FEED_HMAC_SECRET` in the backend runtime environment. Keep `IPOSPAYS_FEED_ENABLED=false` and both profile values `unfinalized` until the provider contract is confirmed.
+2. Ensure the PHP/web process can write to `backend/storage/logs`.
+3. From the deployed backend directory, run `php artisan config:cache`.
+4. Monitor the current daily file with `tail -f storage/logs/ipospays-feed-$(date +%F).log` while Merchant Services triggers a connection attempt.
+5. Confirm the request structure and authentication outcome without sharing or copying any secret or payload values.
+6. After the observation window, set `IPOSPAYS_FEED_DIAGNOSTIC_MODE=false` and run `php artisan config:cache` again.
+
+Diagnostic logs must remain private server-side operational data and should not be exposed through the web server.
 
 ## Stop
 
