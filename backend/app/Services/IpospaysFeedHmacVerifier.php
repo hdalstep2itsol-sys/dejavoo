@@ -10,9 +10,6 @@ use Throwable;
 class IpospaysFeedHmacVerifier
 {
     /**
-     * No profile is registered until Dejavoo supplies a confirmed canonical
-     * contract and signed test vector.
-     *
      * @param  array<string, IpospaysFeedHmacProfile>  $profiles
      */
     public function __construct(private readonly array $profiles = []) {}

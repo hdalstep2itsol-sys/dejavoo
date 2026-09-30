@@ -13,6 +13,7 @@ use App\Models\Location;
 use App\Models\NormalizedTransaction;
 use App\Models\TrailerLoad;
 use App\Models\User;
+use App\Services\DejavooFeedV1HmacProfile;
 use App\Services\IpospaysFeedDiagnosticObserver;
 use App\Services\IpospaysFeedProcessor;
 use App\Services\IpospaysTerminalResolver;
@@ -80,6 +81,44 @@ class IpospaysFeedWebhookTest extends TestCase
         $this->postRaw('{"signature":"provider-signature"}')
             ->assertServiceUnavailable()
             ->assertJsonPath('code', 'hmac_profile_unfinalized');
+
+        $this->assertDatabaseCount('ipospays_feed_events', 0);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_valid_finalized_hmac_passes_authentication_but_mapping_remains_locked(): void
+    {
+        config()->set('ipospays.feed.enabled', true);
+        config()->set('ipospays.feed.hmac_secret', 'unit-test-secret');
+        config()->set('ipospays.feed.hmac_profile', DejavooFeedV1HmacProfile::NAME);
+        $payload = $this->confirmedProviderPayload();
+        $payload['signature'] = app(DejavooFeedV1HmacProfile::class)
+            ->expectedSignature($payload, 'unit-test-secret');
+
+        $this->postRaw(json_encode($payload, JSON_THROW_ON_ERROR))
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'provider_mapping_unfinalized');
+
+        $this->assertDatabaseHas('ipospays_feed_events', [
+            'status' => IpospaysFeedEventStatus::PendingProviderMapping->value,
+            'error_code' => 'provider_mapping_unfinalized',
+        ]);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_one_character_hmac_change_is_rejected_before_mapping(): void
+    {
+        config()->set('ipospays.feed.enabled', true);
+        config()->set('ipospays.feed.hmac_secret', 'unit-test-secret');
+        config()->set('ipospays.feed.hmac_profile', DejavooFeedV1HmacProfile::NAME);
+        $payload = $this->confirmedProviderPayload();
+        $payload['signature'] = app(DejavooFeedV1HmacProfile::class)
+            ->expectedSignature($payload, 'unit-test-secret');
+        $payload['signature'][0] = $payload['signature'][0] === 'a' ? 'b' : 'a';
+
+        $this->postRaw(json_encode($payload, JSON_THROW_ON_ERROR))
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'hmac_signature_invalid');
 
         $this->assertDatabaseCount('ipospays_feed_events', 0);
         $this->assertDatabaseCount('normalized_transactions', 0);
@@ -460,6 +499,31 @@ class IpospaysFeedWebhookTest extends TestCase
             ],
             $body,
         );
+    }
+
+    /** @return array<string, mixed> */
+    private function confirmedProviderPayload(): array
+    {
+        return [
+            'signature' => null,
+            'id' => 'observed-event-id',
+            'eventType' => 'Transaction',
+            'subEventType' => 'SALE',
+            'requestType' => 'N',
+            'version' => '1.0',
+            'createdDt' => '2026-09-30 12:34:56',
+            'data' => [
+                'tpn' => 'observed-tpn',
+                'termId' => 'observed-terminal-id',
+                'mid' => 'observed-mid',
+                'transactionId' => 'observed-transaction-id',
+                'amount' => 20.0,
+                'baseAmount' => 18.5,
+                'transactionType' => 'CREDIT',
+                'txDate' => '2026-09-30',
+                'txTime' => '12:34:56',
+            ],
+        ];
     }
 
     /**
