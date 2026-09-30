@@ -9,6 +9,7 @@ use App\Enums\NormalizedTransactionType;
 use App\Enums\TrailerLoadStatus;
 use App\Enums\UserRole;
 use App\Models\DejavooTerminal;
+use App\Models\IpospaysFeedEvent;
 use App\Models\Location;
 use App\Models\NormalizedTransaction;
 use App\Models\TrailerLoad;
@@ -410,7 +411,7 @@ class IpospaysFeedWebhookTest extends TestCase
         $this->assertDatabaseCount('normalized_transactions', 1);
     }
 
-    public function test_duplicate_key_race_re_reads_the_winning_normalized_transaction(): void
+    public function test_concurrent_duplicate_postings_re_read_the_winning_normalized_transaction(): void
     {
         [$location] = $this->operationalTerminal(['tpn' => 'TPN-TX-RACE']);
         $this->activeLoad($location);
@@ -484,6 +485,168 @@ class IpospaysFeedWebhookTest extends TestCase
         $this->assertSame('20.00', NormalizedTransaction::query()->sole()->business_amount);
     }
 
+    public function test_signed_sale_uses_amount_and_transaction_time_for_normalization(): void
+    {
+        [$location, $terminal] = $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        $load = $this->activeLoad($location);
+        $payload = $this->confirmedProviderPayload();
+        $payload['createdDt'] = '2025-01-01 00:00:00';
+        $payload['data']['amount'] = 20.0;
+        $payload['data']['baseAmount'] = 999.0;
+
+        $this->postSigned($payload)
+            ->assertOk()
+            ->assertExactJson(['status' => 'accepted', 'code' => 'processed']);
+
+        $transaction = NormalizedTransaction::query()->sole();
+        $event = IpospaysFeedEvent::query()
+            ->where('normalized_transaction_id', $transaction->id)
+            ->sole();
+        $this->assertSame('ipospays_feed', $transaction->source);
+        $this->assertSame('observed-transaction-id', $transaction->external_transaction_id);
+        $this->assertSame(NormalizedTransactionType::Sale, $transaction->transaction_type);
+        $this->assertSame('20.00', $transaction->business_amount);
+        $this->assertSame('1.00000000', $transaction->unit_delta);
+        $this->assertSame('2026-09-30 16:34:56', $transaction->occurred_at->utc()->format('Y-m-d H:i:s'));
+        $this->assertSame('observed-event-id', $event->provider_event_id);
+        $this->assertSame('observed-transaction-id', $event->provider_transaction_id);
+        $this->assertSame($terminal->id, $transaction->dejavoo_terminal_id);
+        $this->assertSame('1.00000000', $load->refresh()->operationalUnits());
+    }
+
+    public function test_signed_refund_maps_to_negative_units(): void
+    {
+        [$location] = $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        $this->activeLoad($location);
+        $payload = $this->confirmedProviderPayload();
+        $payload['subEventType'] = 'REFUND';
+
+        $this->postSigned($payload)->assertOk();
+
+        $transaction = NormalizedTransaction::query()->sole();
+        $this->assertSame(NormalizedTransactionType::Refund, $transaction->transaction_type);
+        $this->assertSame('-1.00000000', $transaction->unit_delta);
+    }
+
+    public function test_signed_void_sale_and_void_map_to_void(): void
+    {
+        foreach (['VOID SALE', 'VOID'] as $index => $subEventType) {
+            [$location] = $this->operationalTerminal([
+                'tpn' => "VOID-TPN-{$index}",
+                'term_id' => "VOID-TERM-{$index}",
+            ]);
+            $this->activeLoad($location);
+            $payload = $this->confirmedProviderPayload();
+            $payload['id'] = "VOID-EVENT-{$index}";
+            $payload['subEventType'] = $subEventType;
+            $payload['data']['transactionId'] = "VOID-TRANSACTION-{$index}";
+            $payload['data']['tpn'] = "VOID-TPN-{$index}";
+            $payload['data']['termId'] = "VOID-TERM-{$index}";
+
+            $this->postSigned($payload)->assertOk();
+        }
+
+        $this->assertDatabaseCount('normalized_transactions', 2);
+        $this->assertSame(
+            [NormalizedTransactionType::Void, NormalizedTransactionType::Void],
+            NormalizedTransaction::query()->orderBy('id')->get()
+                ->map(fn (NormalizedTransaction $transaction) => $transaction->transaction_type)
+                ->all(),
+        );
+        $this->assertSame(
+            ['-1.00000000', '-1.00000000'],
+            NormalizedTransaction::query()->orderBy('id')->pluck('unit_delta')->all(),
+        );
+    }
+
+    public function test_unsupported_transaction_type_is_acknowledged_without_units(): void
+    {
+        [$location] = $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        $load = $this->activeLoad($location);
+        $payload = $this->confirmedProviderPayload();
+        $payload['subEventType'] = 'TIP ADJUST';
+
+        $this->postSigned($payload)
+            ->assertOk()
+            ->assertExactJson(['status' => 'accepted', 'code' => 'unsupported']);
+
+        $this->assertDatabaseHas('ipospays_feed_events', [
+            'provider_event_id' => 'observed-event-id',
+            'status' => IpospaysFeedEventStatus::Unsupported->value,
+            'error_code' => 'unsupported_transaction_type',
+        ]);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+        $this->assertSame('0.00000000', $load->refresh()->operationalUnits());
+    }
+
+    public function test_two_provider_postings_create_one_transaction_and_one_unit_delta(): void
+    {
+        [$location] = $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        $load = $this->activeLoad($location);
+        $first = $this->confirmedProviderPayload();
+        $second = $first;
+        $second['id'] = 'observed-update-event-id';
+        $second['requestType'] = 'U';
+        $second['data']['baseAmount'] = 777.0;
+        $second['data']['approvalCode'] = 'new-receipt-field';
+
+        $this->postSigned($first)->assertOk()->assertJsonPath('code', 'processed');
+        $this->postSigned($second)->assertOk()->assertJsonPath('code', 'duplicate');
+
+        $this->assertDatabaseCount('ipospays_feed_events', 2);
+        $this->assertDatabaseCount('normalized_transactions', 1);
+        $this->assertSame('1.00000000', $load->refresh()->operationalUnits());
+        $this->assertSame(
+            1,
+            NormalizedTransaction::query()
+                ->where('source', 'ipospays_feed')
+                ->where('external_transaction_id', 'observed-transaction-id')
+                ->count(),
+        );
+    }
+
+    public function test_settlement_event_is_acknowledged_without_normalization(): void
+    {
+        $payload = $this->confirmedProviderPayload();
+        $payload['eventType'] = 'Settlement';
+        $payload['subEventType'] = null;
+
+        $this->postSigned($payload)
+            ->assertOk()
+            ->assertExactJson(['status' => 'accepted', 'code' => 'unsupported']);
+
+        $this->assertDatabaseHas('ipospays_feed_events', [
+            'provider_event_id' => 'observed-event-id',
+            'status' => IpospaysFeedEventStatus::Unsupported->value,
+            'error_code' => 'unsupported_event_type',
+        ]);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_signed_transaction_for_unknown_terminal_does_not_normalize(): void
+    {
+        $payload = $this->confirmedProviderPayload();
+        $payload['data']['termId'] = null;
+
+        $this->postSigned($payload)
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'terminal_unknown');
+
+        $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
     private function postRaw(string $body)
     {
         return $this->call(
@@ -499,6 +662,20 @@ class IpospaysFeedWebhookTest extends TestCase
             ],
             $body,
         );
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function postSigned(array $payload)
+    {
+        config()->set('ipospays.feed.enabled', true);
+        config()->set('ipospays.feed.hmac_secret', 'unit-test-secret');
+        config()->set('ipospays.feed.hmac_profile', DejavooFeedV1HmacProfile::NAME);
+        config()->set('ipospays.feed.mapping_profile', 'dejavoo_feed_v1');
+        config()->set('ipospays.feed.timezone', 'America/New_York');
+        $payload['signature'] = app(DejavooFeedV1HmacProfile::class)
+            ->expectedSignature($payload, 'unit-test-secret');
+
+        return $this->postRaw(json_encode($payload, JSON_THROW_ON_ERROR));
     }
 
     /** @return array<string, mixed> */

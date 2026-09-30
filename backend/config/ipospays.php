@@ -7,6 +7,7 @@ return [
         'hmac_secret' => env('IPOSPAYS_FEED_HMAC_SECRET'),
         'hmac_profile' => env('IPOSPAYS_FEED_HMAC_PROFILE', 'unfinalized'),
         'mapping_profile' => env('IPOSPAYS_FEED_MAPPING_PROFILE', 'unfinalized'),
+        'timezone' => env('IPOSPAYS_FEED_TIMEZONE', 'America/New_York'),
         'max_payload_bytes' => (int) env('IPOSPAYS_FEED_MAX_PAYLOAD_BYTES', 262144),
     ],
 ];

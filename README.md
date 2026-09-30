@@ -81,7 +81,7 @@ POST /api/webhooks/ipospays/feed
 
 For the deployed application, its URL is `https://hub.springbackrecyclingtn.com/api/webhooks/ipospays/feed`. The route is deliberately outside Sanctum and is excluded from SPA CSRF checks only for this exact path. It is protected by dedicated HMAC middleware.
 
-The transaction HMAC profile is available as `dejavoo_feed_v1`. It follows the official field-value canonicalization and uses the observed provider casing for `termId` and `mid`, then generates lowercase HMAC-SHA512 output. The endpoint remains disabled by default and transaction mapping remains fail-closed. An authenticated delivery creates only a metadata-only `pending_provider_mapping` receipt until the separate mapping profile is finalized; no provider values or raw payload are retained.
+The transaction HMAC and mapping profiles are both available as `dejavoo_feed_v1`. The HMAC profile follows the official field-value canonicalization and generates lowercase HMAC-SHA512 output. The mapping profile accepts only `eventType=Transaction`, maps supported payment operations from top-level `subEventType`, uses `data.amount`, resolves `data.tpn`/`data.termId`, and converts `data.txDate` plus `data.txTime` from the configured provider timezone to UTC. The endpoint remains disabled by default; raw payloads and sensitive payment/customer fields are never persisted.
 
 Configure these backend runtime variables without committing their values:
 
@@ -91,17 +91,13 @@ IPOSPAYS_FEED_DIAGNOSTIC_MODE=false
 IPOSPAYS_FEED_HMAC_SECRET=
 IPOSPAYS_FEED_HMAC_PROFILE=unfinalized
 IPOSPAYS_FEED_MAPPING_PROFILE=unfinalized
+IPOSPAYS_FEED_TIMEZONE=America/New_York
 IPOSPAYS_FEED_MAX_PAYLOAD_BYTES=262144
 ```
 
-Before transaction normalization is activated, confirm with Dejavoo/iPOSpays:
+For the controlled live transaction retest, set both profile values to `dejavoo_feed_v1`, keep the provided secret only in the server environment, set the provider timezone, clear/cache Laravel configuration, and then enable the FEED. `SALE`, `REFUND`, `VOID SALE`, and `VOID` are supported. Settlement events and ambiguous transaction sub-events are acknowledged as unsupported without creating normalized transactions. Unknown, inactive, or conflicting terminal mappings cannot create normalized transactions.
 
-- Any update-only field casing not present in the observed payload, especially L2/L3 fields.
-- The provider event/request identifier and transaction identifier fields, plus initial/update delivery behavior.
-- The correct business amount (`amount` versus `baseAmount`), SALE/REFUND/VOID values and sign rules.
-- The authoritative transaction timestamp, timezone, acknowledgement body/status, and retry/burst contract.
-
-For an HMAC-only retest, configure `IPOSPAYS_FEED_HMAC_PROFILE=dejavoo_feed_v1` on the server while leaving `IPOSPAYS_FEED_MAPPING_PROFILE=unfinalized`. Set `IPOSPAYS_FEED_ENABLED=true` only during the controlled provider retest. A successfully authenticated request will still return the temporary non-2xx `provider_mapping_unfinalized` response and cannot create a normalized transaction. Unknown, inactive, or conflicting terminal mappings remain non-processing outcomes, and normalized transactions continue to use the existing `(source, external_transaction_id)` uniqueness guard with source `ipospays_feed`.
+The first and update postings are correlated by `data.transactionId`. The first supported posting creates the transaction; a later posting with the same immutable logistics fields is acknowledged idempotently and cannot double-count units. The existing `(source, external_transaction_id)` uniqueness guard remains authoritative with source `ipospays_feed`.
 
 Safe local checks that do not require or reveal a real key:
 
@@ -120,7 +116,7 @@ The dedicated 14-day rotating log is written as `storage/logs/ipospays-feed-YYYY
 
 On the deployed server:
 
-1. Set `IPOSPAYS_FEED_DIAGNOSTIC_MODE=true` and the provided `IPOSPAYS_FEED_HMAC_SECRET` in the backend runtime environment. Keep `IPOSPAYS_FEED_MAPPING_PROFILE=unfinalized`; use `IPOSPAYS_FEED_HMAC_PROFILE=dejavoo_feed_v1` and enable FEED only for the controlled HMAC retest.
+1. Set `IPOSPAYS_FEED_DIAGNOSTIC_MODE=true` and the provided `IPOSPAYS_FEED_HMAC_SECRET` in the backend runtime environment. For a diagnostics-only observation keep mapping fail-closed with `IPOSPAYS_FEED_MAPPING_PROFILE=unfinalized`; for the controlled transaction retest use `dejavoo_feed_v1` for both profiles and set `IPOSPAYS_FEED_TIMEZONE=America/New_York`.
 2. Ensure the PHP/web process can write to `backend/storage/logs`.
 3. From the deployed backend directory, run `php artisan config:cache`.
 4. Monitor the current daily file with `tail -f storage/logs/ipospays-feed-$(date +%F).log` while Merchant Services triggers a connection attempt.

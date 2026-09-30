@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Data\IpospaysFeedProcessingResult;
 use App\Data\MappedIpospaysFeedTransaction;
+use App\Data\MappedIpospaysFeedUnsupportedEvent;
 use App\Enums\IpospaysFeedEventStatus;
 use App\Exceptions\IpospaysTerminalResolutionException;
 use App\Exceptions\NormalizedTransactionException;
@@ -147,11 +148,31 @@ class IpospaysFeedProcessor
         }, 3);
     }
 
+    public function processUnsupported(
+        MappedIpospaysFeedUnsupportedEvent $data,
+    ): IpospaysFeedProcessingResult {
+        return DB::transaction(function () use ($data): IpospaysFeedProcessingResult {
+            [$event, $created] = $this->receiveEvent($data);
+
+            if (! $created && ! hash_equals($event->payload_fingerprint, $data->payloadFingerprint())) {
+                return $this->conflict($event, 'event_payload_conflict');
+            }
+
+            $this->log($created ? $data->errorCode : 'duplicate_unsupported_event', $event);
+
+            return new IpospaysFeedProcessingResult(
+                IpospaysFeedEventStatus::Unsupported,
+                $event,
+            );
+        }, 3);
+    }
+
     /**
      * @return array{IpospaysFeedEvent, bool}
      */
-    private function receiveEvent(MappedIpospaysFeedTransaction $data): array
-    {
+    private function receiveEvent(
+        MappedIpospaysFeedTransaction|MappedIpospaysFeedUnsupportedEvent $data,
+    ): array {
         $now = now();
         $inserted = DB::table('ipospays_feed_events')->insertOrIgnore([
             ...$data->receiptAttributes(),

@@ -43,12 +43,12 @@ class IpospaysFeedAcknowledgement
     {
         return match ($status) {
             IpospaysFeedEventStatus::Processed,
-            IpospaysFeedEventStatus::Duplicate => $this->response('accepted', $status->value, 200),
+            IpospaysFeedEventStatus::Duplicate,
+            IpospaysFeedEventStatus::Unsupported => $this->response('accepted', $status->value, 200),
             IpospaysFeedEventStatus::TerminalUnknown,
             IpospaysFeedEventStatus::TerminalInactive,
             IpospaysFeedEventStatus::LocationInactive,
-            IpospaysFeedEventStatus::Conflict,
-            IpospaysFeedEventStatus::Unsupported => $this->response('rejected', $status->value, 422),
+            IpospaysFeedEventStatus::Conflict => $this->response('rejected', $status->value, 422),
             default => $this->transientFailure(),
         };
     }

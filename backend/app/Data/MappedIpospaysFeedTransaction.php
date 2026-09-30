@@ -77,7 +77,6 @@ final readonly class MappedIpospaysFeedTransaction
             'provider_transaction_id' => $this->providerTransactionId,
             'transaction_type' => $this->transactionType->value,
             'business_amount' => $this->businessAmount,
-            'base_amount' => $this->baseAmount,
             'occurred_at' => $this->occurredAt->toIso8601String(),
         ]);
     }

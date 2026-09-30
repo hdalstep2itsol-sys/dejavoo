@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Webhooks;
 
+use App\Data\MappedIpospaysFeedTransaction;
 use App\Exceptions\IpospaysProviderProfileNotFinalizedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Webhooks\IpospaysFeedRequest;
@@ -21,8 +22,10 @@ class IpospaysFeedController extends Controller
         IpospaysFeedAcknowledgement $acknowledgement,
     ): JsonResponse {
         try {
-            $mappedTransaction = $mapper->map($request->feedPayload());
-            $result = $processor->process($mappedTransaction);
+            $mapped = $mapper->map($request->feedPayload());
+            $result = $mapped instanceof MappedIpospaysFeedTransaction
+                ? $processor->process($mapped)
+                : $processor->processUnsupported($mapped);
 
             return $acknowledgement->processingResult($result->status);
         } catch (IpospaysProviderProfileNotFinalizedException) {
