@@ -100,7 +100,7 @@ class DejavooFeedV1HmacProfile implements IpospaysFeedHmacProfile
      *
      * @param  array<string, mixed>  $payload
      */
-    private function canonicalize(array $payload): string
+    public function canonicalize(array $payload): string
     {
         $data = $payload['data'] ?? [];
         if (! is_array($data)) {

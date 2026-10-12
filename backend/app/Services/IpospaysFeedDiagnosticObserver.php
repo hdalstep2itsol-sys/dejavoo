@@ -34,7 +34,8 @@ class IpospaysFeedDiagnosticObserver
         }
 
         try {
-            $observationId = (string) Str::uuid();
+            $observationId = (string) ($request->attributes->get('ipospays_feed_request_id')
+                ?? Str::uuid());
             $this->logs->channel('ipospays_feed')->info(
                 'iPOSpays FEED diagnostic request observed.',
                 $this->metadata($request, $rawBody, $observationId),
@@ -58,6 +59,7 @@ class IpospaysFeedDiagnosticObserver
                 'iPOSpays FEED diagnostic outcome recorded.',
                 [
                     'observation_id' => $observationId,
+                    'request_id' => $observationId,
                     'recorded_at' => now()->toIso8601String(),
                     'outcome' => $outcome,
                 ],
@@ -84,6 +86,7 @@ class IpospaysFeedDiagnosticObserver
 
         return [
             'observation_id' => $observationId,
+            'request_id' => $observationId,
             'received_at' => now()->toIso8601String(),
             'outcome' => 'received',
             'http_method' => $request->getMethod(),

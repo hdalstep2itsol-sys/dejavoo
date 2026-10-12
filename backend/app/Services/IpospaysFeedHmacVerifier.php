@@ -19,36 +19,75 @@ class IpospaysFeedHmacVerifier
      */
     public function verify(array $payload): IpospaysFeedHmacResult
     {
+        $profileName = trim((string) config('ipospays.feed.hmac_profile'));
         $receivedSignature = $payload['signature'] ?? null;
         if (! is_string($receivedSignature) || trim($receivedSignature) === '') {
-            return new IpospaysFeedHmacResult(IpospaysFeedHmacStatus::SignatureMissing);
+            return new IpospaysFeedHmacResult(
+                IpospaysFeedHmacStatus::SignatureMissing,
+                profileName: $profileName,
+            );
         }
 
+        $receivedSignature = trim($receivedSignature);
+        $receivedFingerprint = $this->fingerprint($receivedSignature);
+
         if (! config('ipospays.feed.enabled')) {
-            return new IpospaysFeedHmacResult(IpospaysFeedHmacStatus::FeedDisabled);
+            return new IpospaysFeedHmacResult(
+                IpospaysFeedHmacStatus::FeedDisabled,
+                profileName: $profileName,
+                receivedSignatureFingerprint: $receivedFingerprint,
+            );
         }
 
         $secret = (string) config('ipospays.feed.hmac_secret');
         if ($secret === '') {
-            return new IpospaysFeedHmacResult(IpospaysFeedHmacStatus::SecretMissing);
+            return new IpospaysFeedHmacResult(
+                IpospaysFeedHmacStatus::SecretMissing,
+                profileName: $profileName,
+                receivedSignatureFingerprint: $receivedFingerprint,
+            );
         }
 
-        $profileName = trim((string) config('ipospays.feed.hmac_profile'));
         $profile = $this->profiles[$profileName] ?? null;
         if (! $profile instanceof IpospaysFeedHmacProfile) {
-            return new IpospaysFeedHmacResult(IpospaysFeedHmacStatus::ProfileUnfinalized);
+            return new IpospaysFeedHmacResult(
+                IpospaysFeedHmacStatus::ProfileUnfinalized,
+                profileName: $profileName,
+                receivedSignatureFingerprint: $receivedFingerprint,
+            );
         }
 
         try {
+            $canonical = $profile->canonicalize($payload);
             $expectedSignature = $profile->expectedSignature($payload, $secret);
         } catch (Throwable) {
-            return new IpospaysFeedHmacResult(IpospaysFeedHmacStatus::VerificationFailed);
+            return new IpospaysFeedHmacResult(
+                IpospaysFeedHmacStatus::VerificationFailed,
+                profileName: $profileName,
+                receivedSignatureFingerprint: $receivedFingerprint,
+            );
         }
 
-        if ($expectedSignature === '' || ! hash_equals($expectedSignature, trim($receivedSignature))) {
-            return new IpospaysFeedHmacResult(IpospaysFeedHmacStatus::InvalidSignature);
-        }
+        $canonicalLength = strlen($canonical);
+        $canonicalSha256 = hash('sha256', $canonical);
+        $expectedFingerprint = $this->fingerprint($expectedSignature);
+        $matches = $expectedSignature !== '' && hash_equals($expectedSignature, $receivedSignature);
 
-        return new IpospaysFeedHmacResult(IpospaysFeedHmacStatus::Verified);
+        return new IpospaysFeedHmacResult(
+            $matches
+                ? IpospaysFeedHmacStatus::Verified
+                : IpospaysFeedHmacStatus::InvalidSignature,
+            profileName: $profileName,
+            canonicalLength: $canonicalLength,
+            canonicalSha256: $canonicalSha256,
+            expectedSignatureFingerprint: $expectedFingerprint,
+            receivedSignatureFingerprint: $receivedFingerprint,
+            signaturesMatched: $matches,
+        );
+    }
+
+    private function fingerprint(string $signature): string
+    {
+        return substr(hash('sha256', $signature), 0, 16);
     }
 }

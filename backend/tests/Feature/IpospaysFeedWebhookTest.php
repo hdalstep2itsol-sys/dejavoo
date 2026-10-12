@@ -15,6 +15,7 @@ use App\Models\NormalizedTransaction;
 use App\Models\TrailerLoad;
 use App\Models\User;
 use App\Services\DejavooFeedV1HmacProfile;
+use App\Services\IpospaysFeedAuthDiagnosticLogger;
 use App\Services\IpospaysFeedDiagnosticObserver;
 use App\Services\IpospaysFeedProcessor;
 use App\Services\IpospaysTerminalResolver;
@@ -27,6 +28,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Mockery;
 use PDOException;
 use Tests\TestCase;
@@ -42,6 +44,7 @@ class IpospaysFeedWebhookTest extends TestCase
         CarbonImmutable::setTestNow('2026-09-15 00:00:00');
         config()->set('ipospays.feed.enabled', false);
         config()->set('ipospays.feed.diagnostic_mode', false);
+        config()->set('ipospays.feed.auth_diagnostics', false);
         config()->set('ipospays.feed.hmac_secret');
         config()->set('ipospays.feed.hmac_profile', 'unfinalized');
         config()->set('ipospays.feed.mapping_profile', 'unfinalized');
@@ -210,6 +213,115 @@ class IpospaysFeedWebhookTest extends TestCase
                     && ! str_contains($logged, 'SIGNATURE-MUST-NOT-APPEAR')
                     && ! str_contains($logged, '411111');
             });
+    }
+
+    public function test_auth_diagnostics_record_valid_hmac_with_canonical_metadata_and_request_id(): void
+    {
+        config()->set('ipospays.feed.enabled', true);
+        config()->set('ipospays.feed.auth_diagnostics', true);
+        config()->set('ipospays.feed.hmac_secret', 'unit-test-secret');
+        config()->set('ipospays.feed.hmac_profile', DejavooFeedV1HmacProfile::NAME);
+        $payload = $this->confirmedProviderPayload();
+        $profile = app(DejavooFeedV1HmacProfile::class);
+        $payload['signature'] = $profile->expectedSignature($payload, 'unit-test-secret');
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
+        $canonical = $profile->canonicalize($payload);
+
+        $diagnostics = Mockery::mock(IpospaysFeedAuthDiagnosticLogger::class);
+        $diagnostics->shouldReceive('record')
+            ->once()
+            ->withArgs(function (
+                $request,
+                string $loggedBody,
+                string $requestId,
+                string $stage,
+                ?array $loggedPayload = null,
+                $result = null,
+            ) use ($body, $payload, $canonical): bool {
+                return $loggedBody === $body
+                    && Str::isUuid($requestId)
+                    && $stage === 'hmac_verified'
+                    && ($loggedPayload['id'] ?? null) === $payload['id']
+                    && $result?->canonicalLength === strlen($canonical)
+                    && $result?->canonicalSha256 === hash('sha256', $canonical)
+                    && $result?->signaturesMatched === true;
+            });
+        $this->app->instance(IpospaysFeedAuthDiagnosticLogger::class, $diagnostics);
+
+        $this->postRaw($body)->assertServiceUnavailable();
+    }
+
+    public function test_auth_diagnostics_record_invalid_hmac(): void
+    {
+        config()->set('ipospays.feed.enabled', true);
+        config()->set('ipospays.feed.auth_diagnostics', true);
+        config()->set('ipospays.feed.hmac_secret', 'unit-test-secret');
+        config()->set('ipospays.feed.hmac_profile', DejavooFeedV1HmacProfile::NAME);
+        $payload = $this->confirmedProviderPayload();
+        $payload['signature'] = str_repeat('a', 128);
+
+        $diagnostics = Mockery::mock(IpospaysFeedAuthDiagnosticLogger::class);
+        $diagnostics->shouldReceive('record')
+            ->once()
+            ->withArgs(fn (
+                $request,
+                string $body,
+                string $requestId,
+                string $stage,
+                ?array $loggedPayload = null,
+                $result = null,
+            ): bool => Str::isUuid($requestId)
+                && $stage === 'hmac_signature_invalid'
+                && ($loggedPayload['id'] ?? null) === $payload['id']
+                && $result?->signaturesMatched === false
+                && strlen((string) $result?->expectedSignatureFingerprint) === 16
+                && strlen((string) $result?->receivedSignatureFingerprint) === 16);
+        $this->app->instance(IpospaysFeedAuthDiagnosticLogger::class, $diagnostics);
+
+        $this->postRaw(json_encode($payload, JSON_THROW_ON_ERROR))->assertUnauthorized();
+    }
+
+    public function test_auth_diagnostics_record_missing_signature(): void
+    {
+        config()->set('ipospays.feed.auth_diagnostics', true);
+        $diagnostics = Mockery::mock(IpospaysFeedAuthDiagnosticLogger::class);
+        $diagnostics->shouldReceive('record')
+            ->once()
+            ->withArgs(fn (
+                $request,
+                string $body,
+                string $requestId,
+                string $stage,
+                ?array $payload = null,
+                $result = null,
+            ): bool => $body === '{}'
+                && Str::isUuid($requestId)
+                && $stage === 'hmac_signature_missing'
+                && $payload === []
+                && $result?->signaturesMatched === null);
+        $this->app->instance(IpospaysFeedAuthDiagnosticLogger::class, $diagnostics);
+
+        $this->postRaw('{}')->assertUnauthorized();
+    }
+
+    public function test_auth_diagnostics_record_plain_text_as_malformed_without_inspection(): void
+    {
+        config()->set('ipospays.feed.auth_diagnostics', true);
+        $body = 'This is a test from Host Merchant Services';
+        $diagnostics = Mockery::mock(IpospaysFeedAuthDiagnosticLogger::class);
+        $diagnostics->shouldReceive('record')
+            ->once()
+            ->withArgs(fn (
+                $request,
+                string $loggedBody,
+                string $requestId,
+                string $stage,
+            ): bool => $loggedBody === $body
+                && Str::isUuid($requestId)
+                && $stage === 'malformed_json');
+        $this->app->instance(IpospaysFeedAuthDiagnosticLogger::class, $diagnostics);
+
+        $this->postRaw($body)->assertBadRequest();
     }
 
     public function test_tpn_resolves_with_exact_trimmed_matching(): void

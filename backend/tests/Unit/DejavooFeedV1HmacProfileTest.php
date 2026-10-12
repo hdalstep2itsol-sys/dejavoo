@@ -10,6 +10,88 @@ use Tests\TestCase;
 
 class DejavooFeedV1HmacProfileTest extends TestCase
 {
+    public function test_provider_sample_reproduces_the_exact_supplied_canonical_string(): void
+    {
+        $profile = new DejavooFeedV1HmacProfile;
+        $payload = [
+            'signature' => 'excluded-provider-signature',
+            'id' => '229f78b9-6861-49d3-8fb3-d3282b9ab801',
+            'eventType' => 'Transaction',
+            'subEventType' => 'SALE',
+            'requestType' => 'N',
+            'version' => '3.0',
+            'createdDt' => '2024-09-03 08:53:39',
+            'data' => [
+                'additionalDetails' => '',
+                'amount' => 3.25,
+                'approvalCode' => 'TAS865',
+                'baseAmount' => 2.4,
+                'buildNumber' => null,
+                'cardCategory' => 'CLASSIC',
+                'cardInfo' => 'PERSONAL',
+                'cardLabel' => 'VISA',
+                'cardToken' => null,
+                'cardType' => 'CREDIT',
+                'chName' => 'Dhoni',
+                'commercialTaxAmount' => 0.0,
+                'commMedia' => null,
+                'consumerId' => null,
+                'dba' => 'Virat',
+                'description' => 'PreAuthentication',
+                'destType' => 'TSYS - QA',
+                'deviceModel' => 'Cloud POS',
+                'email' => 'femeyey365@seosnaps.com',
+                'externalReferenceId' => null,
+                'hostResponseCode' => '00',
+                'hostResponseDate' => '2024-09-03',
+                'hostTxId' => null,
+                'invoiceNumber' => '000002',
+                'L2l3UploadFlag' => 'provider-alias-not-in-canonical-string',
+                'localTaxAmount' => 0.5,
+                'maskedPan' => '424242******4242',
+                'Mid' => 'provider-alias-not-in-canonical-string',
+                'minorChannel' => 'E-Commerce',
+                'originalRRN' => null,
+                'performedBy' => 'femeyey365@seosnaps.com',
+                'phoneNumber' => '+19898989898',
+                'posEntryMode' => '100',
+                'posMode' => 'COF',
+                'posRequestDate' => '2024-09-03',
+                'posRequestTime' => '09:35:07',
+                'reconId' => null,
+                'responseText' => 'NO MATCH',
+                'rrn' => '424708751921',
+                'sourceType' => 'ECOM',
+                'stateTaxAmount' => 0.25,
+                'subscriptionId' => null,
+                'tagLabel' => null,
+                'tagValue' => null,
+                'TermId' => 'provider-alias-not-in-canonical-string',
+                'tipAdjAmount' => 0.0,
+                'tipAmount' => 0.0,
+                'totalFee' => 0.0,
+                'tpn' => '931626161433',
+                'tpnBatchNumber' => '408',
+                'tpnLabel' => null,
+                'transactionId' => '18041453739238035220240903133507',
+                'transactionType' => 'CREDIT',
+                'trueCashDiscountFee' => 0.1,
+                'txDate' => '2024-09-03',
+                'txDuration' => '0.786',
+                'txName' => 'SALE',
+                'txTime' => '04:05:06',
+            ],
+        ];
+        $expected = '2024-09-03 08:53:39||3.25|TAS865|2.4||CLASSIC|PERSONAL|VISA||CREDIT|Dhoni|0.0|||Virat|PreAuthentication|TSYS - QA|Cloud POS|femeyey365@seosnaps.com||00|2024-09-03||000002||0.5|424242******4242||E-Commerce||femeyey365@seosnaps.com|+19898989898|100|COF|2024-09-03|09:35:07||NO MATCH|424708751921|ECOM|0.25|||||0.0|0.0|0.0|931626161433|408||18041453739238035220240903133507|CREDIT|0.1|2024-09-03|0.786|SALE|04:05:06|Transaction|229f78b9-6861-49d3-8fb3-d3282b9ab801|N|SALE|3.0';
+
+        $this->assertSame($expected, $this->canonicalize($profile, $payload));
+        $this->assertSame(472, strlen($expected));
+        $this->assertSame(
+            'd7db45a799ad668e500aeb2f23ff8c3d3ed5b1ba68b5328a95fea6b1a808e7c9',
+            hash('sha256', $expected),
+        );
+    }
+
     public function test_profile_uses_the_official_transaction_field_order(): void
     {
         $profile = new DejavooFeedV1HmacProfile;
