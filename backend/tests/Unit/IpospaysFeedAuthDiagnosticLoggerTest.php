@@ -2,7 +2,9 @@
 
 namespace Tests\Unit;
 
+use App\Data\IpospaysFeedBasicAuthResult;
 use App\Data\IpospaysFeedHmacResult;
+use App\Enums\IpospaysFeedBasicAuthStatus;
 use App\Enums\IpospaysFeedHmacStatus;
 use App\Services\IpospaysFeedAuthDiagnosticLogger;
 use Illuminate\Http\Request;
@@ -160,5 +162,59 @@ class IpospaysFeedAuthDiagnosticLoggerTest extends TestCase
         $this->assertSame(hash('sha256', $body), $captured['body_sha256']);
         $this->assertStringNotContainsString($body, json_encode($captured, JSON_THROW_ON_ERROR));
         $this->assertStringNotContainsString('Sensitive user agent', json_encode($captured, JSON_THROW_ON_ERROR));
+    }
+
+    public function test_basic_auth_diagnostic_logs_only_safe_presence_flags(): void
+    {
+        config()->set('ipospays.feed.auth_diagnostics', true);
+        config()->set('ipospays.feed.basic_username', 'BASIC-USERNAME-MUST-NOT-APPEAR');
+        config()->set('ipospays.feed.basic_password', 'BASIC-PASSWORD-MUST-NOT-APPEAR');
+        $body = '{"id":"event-123"}';
+        $request = Request::create(
+            '/api/webhooks/ipospays/feed',
+            'POST',
+            server: [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_AUTHORIZATION' => 'Basic '.base64_encode(
+                    'BASIC-USERNAME-MUST-NOT-APPEAR:BASIC-PASSWORD-MUST-NOT-APPEAR',
+                ),
+            ],
+            content: $body,
+        );
+        $basicResult = new IpospaysFeedBasicAuthResult(
+            IpospaysFeedBasicAuthStatus::Verified,
+            headerPresent: true,
+            usernamePresent: true,
+        );
+
+        $captured = null;
+        $channel = Mockery::mock();
+        $channel->shouldReceive('info')->once()->withArgs(
+            function (string $message, array $context) use (&$captured): bool {
+                $captured = $context;
+
+                return $message === 'iPOSpays FEED auth diagnostic.';
+            },
+        );
+        $logs = Mockery::mock(LogManager::class);
+        $logs->shouldReceive('channel')->once()->andReturn($channel);
+
+        (new IpospaysFeedAuthDiagnosticLogger($logs))->record(
+            $request,
+            $body,
+            'request-basic',
+            'basic_auth_verified',
+            ['id' => 'event-123'],
+            basicResult: $basicResult,
+            authMode: 'basic',
+        );
+
+        $this->assertSame('basic', $captured['auth_mode']);
+        $this->assertTrue($captured['basic_auth_header_present']);
+        $this->assertTrue($captured['basic_auth_username_present']);
+        $logged = json_encode($captured, JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('BASIC-USERNAME-MUST-NOT-APPEAR', $logged);
+        $this->assertStringNotContainsString('BASIC-PASSWORD-MUST-NOT-APPEAR', $logged);
+        $this->assertStringNotContainsString('Authorization', $logged);
     }
 }

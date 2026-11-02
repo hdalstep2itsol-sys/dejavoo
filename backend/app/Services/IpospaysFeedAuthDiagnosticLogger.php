@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Data\IpospaysFeedBasicAuthResult;
 use App\Data\IpospaysFeedHmacResult;
 use Illuminate\Http\Request;
 use Illuminate\Log\LogManager;
@@ -32,6 +33,8 @@ class IpospaysFeedAuthDiagnosticLogger
         ?array $payload = null,
         ?IpospaysFeedHmacResult $result = null,
         ?bool $jsonDecodeSucceeded = null,
+        ?IpospaysFeedBasicAuthResult $basicResult = null,
+        ?string $authMode = null,
     ): void {
         if (! config('ipospays.feed.auth_diagnostics', false)) {
             return;
@@ -59,6 +62,12 @@ class IpospaysFeedAuthDiagnosticLogger
                     'json_decode_succeeded' => true,
                     'top_level_fields' => $this->topLevelFields($payload),
                     'signature_present' => array_key_exists('signature', $payload),
+                    'auth_mode' => $this->safeText(
+                        $authMode ?? (string) config('ipospays.feed.auth_mode', 'hmac'),
+                        self::MAX_NAME_LENGTH,
+                    ),
+                    'basic_auth_header_present' => $basicResult?->headerPresent,
+                    'basic_auth_username_present' => $basicResult?->usernamePresent,
                     'hmac_profile' => $this->safeText(
                         $result?->profileName ?? (string) config('ipospays.feed.hmac_profile'),
                         self::MAX_NAME_LENGTH,

@@ -2,12 +2,30 @@
 
 namespace App\Services;
 
+use App\Enums\IpospaysFeedBasicAuthStatus;
 use App\Enums\IpospaysFeedEventStatus;
 use App\Enums\IpospaysFeedHmacStatus;
 use Illuminate\Http\JsonResponse;
 
 class IpospaysFeedAcknowledgement
 {
+    public function authModeInvalid(): JsonResponse
+    {
+        return $this->response('rejected', 'auth_mode_invalid', 503);
+    }
+
+    public function basicAuthFailure(IpospaysFeedBasicAuthStatus $status): JsonResponse
+    {
+        $httpStatus = match ($status) {
+            IpospaysFeedBasicAuthStatus::Missing,
+            IpospaysFeedBasicAuthStatus::Malformed,
+            IpospaysFeedBasicAuthStatus::Invalid => 401,
+            default => 503,
+        };
+
+        return $this->response('rejected', $status->value, $httpStatus);
+    }
+
     public function malformedJson(): JsonResponse
     {
         return $this->response('rejected', 'malformed_json', 400);

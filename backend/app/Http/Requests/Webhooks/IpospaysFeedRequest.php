@@ -14,7 +14,9 @@ class IpospaysFeedRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'signature' => ['required', 'string'],
+            'signature' => strtolower(trim((string) config('ipospays.feed.auth_mode', 'hmac'))) === 'hmac'
+                ? ['required', 'string']
+                : ['nullable', 'string'],
         ];
     }
 

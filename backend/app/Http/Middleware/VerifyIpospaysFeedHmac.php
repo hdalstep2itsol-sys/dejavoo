@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Enums\IpospaysFeedHmacStatus;
 use App\Services\IpospaysFeedAcknowledgement;
 use App\Services\IpospaysFeedAuthDiagnosticLogger;
+use App\Services\IpospaysFeedBasicAuthVerifier;
 use App\Services\IpospaysFeedDiagnosticObserver;
 use App\Services\IpospaysFeedHmacVerifier;
 use Closure;
@@ -19,6 +20,7 @@ class VerifyIpospaysFeedHmac
 {
     public function __construct(
         private readonly IpospaysFeedHmacVerifier $verifier,
+        private readonly IpospaysFeedBasicAuthVerifier $basicVerifier,
         private readonly IpospaysFeedAcknowledgement $acknowledgement,
         private readonly IpospaysFeedDiagnosticObserver $diagnostics,
         private readonly IpospaysFeedAuthDiagnosticLogger $authDiagnostics,
@@ -93,6 +95,37 @@ class VerifyIpospaysFeedHmac
         /** @var array<string, mixed> $payload */
         $payload = json_decode($rawBody, true, 512, JSON_THROW_ON_ERROR);
 
+        $authMode = strtolower(trim((string) config('ipospays.feed.auth_mode', 'hmac')));
+
+        if ($authMode === 'basic') {
+            return $this->authenticateBasic(
+                $request,
+                $next,
+                $rawBody,
+                $requestId,
+                $observationId,
+                $payload,
+            );
+        }
+
+        if ($authMode !== 'hmac') {
+            $this->authDiagnostics->record(
+                $request,
+                $rawBody,
+                $requestId,
+                'auth_mode_invalid',
+                $payload,
+                authMode: $authMode,
+            );
+            $this->diagnostics->recordOutcome($observationId, 'auth_mode_invalid');
+            Log::warning('iPOSpays FEED authentication rejected.', [
+                'request_id' => $requestId,
+                'code' => 'auth_mode_invalid',
+            ]);
+
+            return $this->acknowledgement->authModeInvalid();
+        }
+
         $result = $this->verifier->verify($payload);
         $this->authDiagnostics->record(
             $request,
@@ -101,6 +134,7 @@ class VerifyIpospaysFeedHmac
             $this->authDiagnosticStage($result->status),
             $payload,
             $result,
+            authMode: $authMode,
         );
         if (! $result->verified()) {
             $this->diagnostics->recordOutcome(
@@ -117,6 +151,46 @@ class VerifyIpospaysFeedHmac
 
         $request->attributes->set('ipospays_feed_payload', $payload);
         $this->diagnostics->recordOutcome($observationId, 'verified');
+
+        return $next($request);
+    }
+
+    /**
+     * @param  Closure(Request): Response  $next
+     * @param  array<string, mixed>  $payload
+     */
+    private function authenticateBasic(
+        Request $request,
+        Closure $next,
+        string $rawBody,
+        string $requestId,
+        ?string $observationId,
+        array $payload,
+    ): Response {
+        $result = $this->basicVerifier->verify($request);
+        $this->authDiagnostics->record(
+            $request,
+            $rawBody,
+            $requestId,
+            $result->status->value,
+            $payload,
+            basicResult: $result,
+            authMode: 'basic',
+        );
+
+        if (! $result->verified()) {
+            $this->diagnostics->recordOutcome($observationId, $result->status->value);
+            Log::warning('iPOSpays FEED authentication rejected.', [
+                'request_id' => $requestId,
+                'code' => $result->status->value,
+                'auth_mode' => 'basic',
+            ]);
+
+            return $this->acknowledgement->basicAuthFailure($result->status);
+        }
+
+        $request->attributes->set('ipospays_feed_payload', $payload);
+        $this->diagnostics->recordOutcome($observationId, 'basic_auth_verified');
 
         return $next($request);
     }

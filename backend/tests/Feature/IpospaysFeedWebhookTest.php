@@ -43,6 +43,9 @@ class IpospaysFeedWebhookTest extends TestCase
 
         CarbonImmutable::setTestNow('2026-09-15 00:00:00');
         config()->set('ipospays.feed.enabled', false);
+        config()->set('ipospays.feed.auth_mode', 'hmac');
+        config()->set('ipospays.feed.basic_username');
+        config()->set('ipospays.feed.basic_password');
         config()->set('ipospays.feed.diagnostic_mode', false);
         config()->set('ipospays.feed.auth_diagnostics', false);
         config()->set('ipospays.feed.hmac_secret');
@@ -126,6 +129,142 @@ class IpospaysFeedWebhookTest extends TestCase
 
         $this->assertDatabaseCount('ipospays_feed_events', 0);
         $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_valid_basic_auth_passes_without_hmac_signature(): void
+    {
+        $this->configureBasicAuth();
+        $payload = $this->confirmedProviderPayload();
+        unset($payload['signature']);
+
+        $this->postRaw(
+            json_encode($payload, JSON_THROW_ON_ERROR),
+            $this->basicAuthorization('dejavoo_feed', 'basic-test-password'),
+        )
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'provider_mapping_unfinalized');
+
+        $this->assertDatabaseHas('ipospays_feed_events', [
+            'status' => IpospaysFeedEventStatus::PendingProviderMapping->value,
+        ]);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_basic_auth_rejects_wrong_username(): void
+    {
+        $this->configureBasicAuth();
+
+        $this->postRaw(
+            json_encode($this->confirmedProviderPayload(), JSON_THROW_ON_ERROR),
+            $this->basicAuthorization('wrong-user', 'basic-test-password'),
+        )
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'basic_auth_invalid');
+    }
+
+    public function test_basic_auth_rejects_wrong_password(): void
+    {
+        $this->configureBasicAuth();
+
+        $this->postRaw(
+            json_encode($this->confirmedProviderPayload(), JSON_THROW_ON_ERROR),
+            $this->basicAuthorization('dejavoo_feed', 'wrong-password'),
+        )
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'basic_auth_invalid');
+    }
+
+    public function test_basic_auth_rejects_missing_authorization_header(): void
+    {
+        $this->configureBasicAuth();
+
+        $this->postRaw(json_encode($this->confirmedProviderPayload(), JSON_THROW_ON_ERROR))
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'basic_auth_missing');
+    }
+
+    public function test_basic_auth_rejects_malformed_authorization_header(): void
+    {
+        $this->configureBasicAuth();
+
+        $this->postRaw(
+            json_encode($this->confirmedProviderPayload(), JSON_THROW_ON_ERROR),
+            ['HTTP_AUTHORIZATION' => 'Basic not-valid-***'],
+        )
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'basic_auth_malformed');
+    }
+
+    public function test_invalid_auth_mode_fails_closed(): void
+    {
+        config()->set('ipospays.feed.auth_mode', 'both');
+        config()->set('ipospays.feed.enabled', true);
+
+        $this->postRaw(json_encode($this->confirmedProviderPayload(), JSON_THROW_ON_ERROR))
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'auth_mode_invalid');
+
+        $this->assertDatabaseCount('ipospays_feed_events', 0);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_valid_basic_auth_reaches_normal_processing_and_creates_transaction(): void
+    {
+        [$location] = $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        $load = $this->activeLoad($location);
+        $this->configureBasicAuth(mappingFinalized: true);
+        $payload = $this->confirmedProviderPayload();
+        unset($payload['signature']);
+
+        $this->postRaw(
+            json_encode($payload, JSON_THROW_ON_ERROR),
+            $this->basicAuthorization('dejavoo_feed', 'basic-test-password'),
+        )
+            ->assertOk()
+            ->assertExactJson(['status' => 'accepted', 'code' => 'processed']);
+
+        $this->assertDatabaseCount('ipospays_feed_events', 1);
+        $this->assertDatabaseCount('normalized_transactions', 1);
+        $this->assertSame('1.00000000', $load->refresh()->operationalUnits());
+    }
+
+    public function test_basic_auth_diagnostics_report_stage_without_credentials(): void
+    {
+        $this->configureBasicAuth();
+        config()->set('ipospays.feed.auth_diagnostics', true);
+        $payload = $this->confirmedProviderPayload();
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
+        $diagnostics = Mockery::mock(IpospaysFeedAuthDiagnosticLogger::class);
+        $diagnostics->shouldReceive('record')
+            ->once()
+            ->withArgs(function (
+                $request,
+                string $loggedBody,
+                string $requestId,
+                string $stage,
+                ?array $loggedPayload = null,
+                $hmacResult = null,
+                $jsonDecoded = null,
+                $basicResult = null,
+                ?string $authMode = null,
+            ) use ($body): bool {
+                return $loggedBody === $body
+                    && Str::isUuid($requestId)
+                    && $stage === 'basic_auth_verified'
+                    && $hmacResult === null
+                    && $basicResult?->headerPresent === true
+                    && $basicResult?->usernamePresent === true
+                    && $authMode === 'basic';
+            });
+        $this->app->instance(IpospaysFeedAuthDiagnosticLogger::class, $diagnostics);
+
+        $this->postRaw(
+            $body,
+            $this->basicAuthorization('dejavoo_feed', 'basic-test-password'),
+        )->assertServiceUnavailable();
     }
 
     public function test_diagnostic_observation_happens_before_unsigned_request_is_rejected(): void
@@ -759,7 +898,8 @@ class IpospaysFeedWebhookTest extends TestCase
         $this->assertDatabaseCount('normalized_transactions', 0);
     }
 
-    private function postRaw(string $body)
+    /** @param array<string, string> $server */
+    private function postRaw(string $body, array $server = [])
     {
         return $this->call(
             'POST',
@@ -771,9 +911,29 @@ class IpospaysFeedWebhookTest extends TestCase
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_ACCEPT' => 'application/json',
                 'HTTP_ORIGIN' => 'http://localhost:3000',
+                ...$server,
             ],
             $body,
         );
+    }
+
+    private function configureBasicAuth(bool $mappingFinalized = false): void
+    {
+        config()->set('ipospays.feed.enabled', true);
+        config()->set('ipospays.feed.auth_mode', 'basic');
+        config()->set('ipospays.feed.basic_username', 'dejavoo_feed');
+        config()->set('ipospays.feed.basic_password', 'basic-test-password');
+        config()->set(
+            'ipospays.feed.mapping_profile',
+            $mappingFinalized ? 'dejavoo_feed_v1' : 'unfinalized',
+        );
+        config()->set('ipospays.feed.timezone', 'America/New_York');
+    }
+
+    /** @return array{HTTP_AUTHORIZATION: string} */
+    private function basicAuthorization(string $username, string $password): array
+    {
+        return ['HTTP_AUTHORIZATION' => 'Basic '.base64_encode($username.':'.$password)];
     }
 
     /** @param array<string, mixed> $payload */
