@@ -257,6 +257,7 @@ class NormalizedTransactionTest extends TestCase
 
     public function test_development_sample_command_is_deterministic_and_local_only(): void
     {
+        $this->app->detectEnvironment(fn () => 'local');
         $this->locationAndLoad('20.00');
 
         $this->artisan('dejavoo:seed-normalized-transactions')

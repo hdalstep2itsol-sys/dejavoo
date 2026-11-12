@@ -8,6 +8,7 @@ use App\Enums\LocationRouteType;
 use App\Enums\NormalizedTransactionType;
 use App\Enums\TrailerLoadStatus;
 use App\Enums\UserRole;
+use App\Exceptions\NormalizedTransactionException;
 use App\Models\DejavooTerminal;
 use App\Models\IpospaysFeedEvent;
 use App\Models\Location;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Services\DejavooFeedV1HmacProfile;
 use App\Services\IpospaysFeedAuthDiagnosticLogger;
 use App\Services\IpospaysFeedDiagnosticObserver;
+use App\Services\IpospaysFeedPayloadMapper;
 use App\Services\IpospaysFeedProcessor;
 use App\Services\IpospaysTerminalResolver;
 use App\Services\LocationPriceService;
@@ -896,6 +898,128 @@ class IpospaysFeedWebhookTest extends TestCase
             ->assertJsonPath('code', 'terminal_unknown');
 
         $this->assertDatabaseCount('normalized_transactions', 0);
+    }
+
+    public function test_unexpected_mapping_failure_logs_safe_diagnostic_context(): void
+    {
+        $this->configureBasicAuth(true);
+        $payload = $this->confirmedProviderPayload();
+        $payload['data']['cardholderName'] = 'Jane Customer';
+        $authorization = $this->basicAuthorization('dejavoo_feed', 'basic-test-password');
+        $mapper = Mockery::mock(IpospaysFeedPayloadMapper::class);
+        $mapper->shouldReceive('map')
+            ->once()
+            ->andThrow(new \RuntimeException(
+                'Failure for customer@example.test using Basic dGVzdDpzZWNyZXQ=, '
+                .'card 4242424242424242, phone +1 (555) 123-4567, Jane Customer, '
+                .'and basic-test-password.',
+            ));
+        $this->app->instance(IpospaysFeedPayloadMapper::class, $mapper);
+        Log::spy();
+
+        $this->postRaw(json_encode($payload, JSON_THROW_ON_ERROR), $authorization)
+            ->assertServiceUnavailable()
+            ->assertExactJson([
+                'status' => 'rejected',
+                'code' => 'temporary_processing_failure',
+            ]);
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->withArgs(function (string $message, array $context): bool {
+                $rendered = json_encode($context, JSON_THROW_ON_ERROR);
+
+                return $message === 'iPOSpays FEED processing failed.'
+                    && Str::isUuid($context['request_id'] ?? null)
+                    && ($context['processing_stage'] ?? null) === 'payload_mapping'
+                    && ($context['exception_class'] ?? null) === \RuntimeException::class
+                    && ($context['provider_event_id'] ?? null) === 'observed-event-id'
+                    && ($context['provider_transaction_id'] ?? null) === 'observed-transaction-id'
+                    && str_contains($context['exception_message'] ?? '', '[REDACTED_')
+                    && ! str_contains($rendered, 'basic-test-password')
+                    && ! str_contains($rendered, 'dGVzdDpzZWNyZXQ=')
+                    && ! str_contains($rendered, 'customer@example.test')
+                    && ! str_contains($rendered, '4242424242424242')
+                    && ! str_contains($rendered, '+1 (555) 123-4567')
+                    && ! str_contains($rendered, 'Jane Customer')
+                    && ! array_key_exists('payload', $context)
+                    && ! array_key_exists('authorization', $context);
+            });
+    }
+
+    public function test_feed_transaction_without_covering_load_records_normalization_reason(): void
+    {
+        $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        Log::spy();
+
+        $this->postSigned($this->confirmedProviderPayload())
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'temporary_processing_failure');
+
+        $this->assertDatabaseHas('ipospays_feed_events', [
+            'provider_event_id' => 'observed-event-id',
+            'status' => IpospaysFeedEventStatus::Failed->value,
+            'error_code' => 'normalization_rejected',
+        ]);
+        $this->assertDatabaseCount('normalized_transactions', 0);
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->with('iPOSpays FEED transaction normalization rejected.', Mockery::on(
+                fn (array $context): bool => $context['processing_stage'] === 'transaction_normalization'
+                    && $context['exception_class'] === NormalizedTransactionException::class
+                    && $context['exception_message'] === 'No trailer/load cycle covers the transaction timestamp.'
+                    && $context['provider_event_id'] === 'observed-event-id'
+                    && $context['provider_transaction_id'] === 'observed-transaction-id',
+            ));
+    }
+
+    public function test_feed_transaction_without_effective_price_records_normalization_reason(): void
+    {
+        [$location] = $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        $this->activeLoad($location);
+        $location->priceHistory()->delete();
+        Log::spy();
+
+        $this->postSigned($this->confirmedProviderPayload())
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'temporary_processing_failure');
+
+        $this->assertDatabaseCount('normalized_transactions', 0);
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->with('iPOSpays FEED transaction normalization rejected.', Mockery::on(
+                fn (array $context): bool => $context['processing_stage'] === 'transaction_normalization'
+                    && $context['exception_message'] === 'No location price covers the transaction timestamp.',
+            ));
+    }
+
+    public function test_feed_transaction_with_non_positive_price_is_rejected_safely(): void
+    {
+        [$location] = $this->operationalTerminal([
+            'tpn' => 'observed-tpn',
+            'term_id' => 'observed-terminal-id',
+        ]);
+        $this->activeLoad($location);
+        $location->priceHistory()->update(['unit_price' => '0.00']);
+        Log::spy();
+
+        $this->postSigned($this->confirmedProviderPayload())
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'temporary_processing_failure');
+
+        $this->assertDatabaseCount('normalized_transactions', 0);
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->with('iPOSpays FEED transaction normalization rejected.', Mockery::on(
+                fn (array $context): bool => $context['processing_stage'] === 'transaction_normalization'
+                    && $context['exception_message'] === 'The location must have a positive unit price.',
+            ));
     }
 
     /** @param array<string, string> $server */

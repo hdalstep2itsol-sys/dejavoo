@@ -119,10 +119,21 @@ class IpospaysFeedProcessor
                 }
 
                 return $this->completeExisting($event, $transaction, $terminal->id, $data);
-            } catch (NormalizedTransactionException) {
+            } catch (NormalizedTransactionException $exception) {
                 $event->update([
                     'status' => IpospaysFeedEventStatus::Failed,
                     'error_code' => 'normalization_rejected',
+                ]);
+                Log::warning('iPOSpays FEED transaction normalization rejected.', [
+                    'code' => 'normalization_rejected',
+                    'processing_stage' => 'transaction_normalization',
+                    'exception_class' => $exception::class,
+                    'exception_message' => $exception->getMessage(),
+                    'feed_event_id' => $event->id,
+                    'provider_event_id' => $event->provider_event_id,
+                    'provider_transaction_id' => $event->provider_transaction_id,
+                    'terminal_id' => $event->dejavoo_terminal_id,
+                    'location_id' => $event->location_id,
                 ]);
                 $this->log('normalization_rejected', $event);
 
