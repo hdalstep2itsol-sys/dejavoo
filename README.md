@@ -65,7 +65,7 @@ Location price changes create effective-dated history entries. Within each locat
 
 ## Production mail and queued notifications
 
-Operational notifications are queued after database commit. Production must use a real mail transport and a continuously supervised queue worker. Configure these values only in the server runtime environment:
+Operational notifications are queued after database commit. Docker Compose includes a private `queue-worker` service that uses the backend image, application code, database, mail, and operational-alert configuration. It waits for healthy MySQL and restarts automatically without exposing a port. Configure these values only in the server runtime environment:
 
 ```dotenv
 QUEUE_CONNECTION=database
@@ -83,7 +83,7 @@ IPOSPAYS_FEED_FAILURE_ALERT_WINDOW_SECONDS=900
 IPOSPAYS_FEED_FAILURE_RECENT_SECONDS=86400
 ```
 
-After deployment, run migrations, cache configuration, and run `php artisan queue:work --tries=3 --timeout=90` under the server's process supervisor. Threshold notifications go once per active load to active Owner/Admin users. Swap notifications go once per swapped load to active Warehouse Staff users. Repeated FEED failure alerts go to `IPOSPAYS_FEED_ALERT_EMAIL`, at most once per configured alert window. No provider payload, credentials, card data, or customer data is included in these notifications.
+After deployment, run migrations and recreate the Compose services with `docker compose up -d --build`. Compose runs `php artisan queue:work --tries=3 --timeout=90` continuously in `queue-worker`; no separate host-level worker is needed. If cached Laravel configuration is used, rebuild it in the backend container and restart both `backend` and `queue-worker` so they receive the same values. Threshold notifications go once per active load to active Owner/Admin users. Swap notifications go once per swapped load to active Warehouse Staff users. Repeated FEED failure alerts go to `IPOSPAYS_FEED_ALERT_EMAIL`, at most once per configured alert window. No provider payload, credentials, card data, or customer data is included in these notifications.
 
 To create deterministic normalized SALE, REFUND, and VOID samples for an existing trailer/load, run:
 
