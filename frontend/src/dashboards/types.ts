@@ -19,6 +19,12 @@ export interface AdminDashboardLocation {
 
 export interface AdminDashboardData {
   summary: AdminDashboardSummary;
+  feed_status: {
+    state: "healthy" | "warning";
+    last_processed_at: string | null;
+    recent_failure_count: number;
+    failure_window_seconds: number;
+  };
   locations: AdminDashboardLocation[];
 }
 

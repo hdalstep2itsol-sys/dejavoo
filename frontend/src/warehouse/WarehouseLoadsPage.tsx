@@ -263,9 +263,9 @@ export function WarehouseLoadsPage() {
               <p className="mt-4 rounded-xl border border-dashed border-slate-700 p-6 text-slate-400">No recent confirmations.</p>
             ) : (
               <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
-                <table className="w-full min-w-[560px] text-left text-sm">
-                  <thead className="bg-slate-950/60 text-slate-400"><tr><th className="px-4 py-3 font-medium">Location</th><th className="px-4 py-3 font-medium">Actual count</th><th className="px-4 py-3 font-medium">Confirmed at</th></tr></thead>
-                  <tbody className="divide-y divide-slate-800">{recentConfirmed.map((load) => <tr key={load.id}><td className="px-4 py-4 font-semibold">{load.location?.name}</td><td className="px-4 py-4">{load.warehouse_actual_count}</td><td className="px-4 py-4">{formatDateTime(load.warehouse_confirmed_at)}</td></tr>)}</tbody>
+                <table className="w-full min-w-[900px] text-left text-sm">
+                  <thead className="bg-slate-950/60 text-slate-400"><tr><th className="px-4 py-3 font-medium">Location</th><th className="px-4 py-3 font-medium">Calculated units</th><th className="px-4 py-3 font-medium">Actual count</th><th className="px-4 py-3 font-medium">Variance</th><th className="px-4 py-3 font-medium">Notes</th><th className="px-4 py-3 font-medium">Confirmed at</th></tr></thead>
+                  <tbody className="divide-y divide-slate-800">{recentConfirmed.map((load) => <tr key={load.id}><td className="px-4 py-4 font-semibold">{load.location?.name}</td><td className="px-4 py-4">{displayUnits(load.calculated_units)}</td><td className="px-4 py-4">{load.warehouse_actual_count}</td><td className="px-4 py-4">{load.warehouse_variance === null ? "—" : displayUnits(load.warehouse_variance)}</td><td className="max-w-xs whitespace-normal px-4 py-4">{load.warehouse_notes ?? "—"}</td><td className="px-4 py-4">{formatDateTime(load.warehouse_confirmed_at)}</td></tr>)}</tbody>
                 </table>
               </div>
             )}

@@ -15,7 +15,10 @@ class NormalizedTransactionService
 {
     public const UNIT_SCALE = 8;
 
-    public function __construct(private readonly LocationPriceService $priceService) {}
+    public function __construct(
+        private readonly LocationPriceService $priceService,
+        private readonly OperationalNotificationService $notifications,
+    ) {}
 
     public function create(
         int $locationId,
@@ -58,7 +61,7 @@ class NormalizedTransactionService
                 ? '-'.$unitMagnitude
                 : $unitMagnitude;
 
-            return NormalizedTransaction::query()->create([
+            $transaction = NormalizedTransaction::query()->create([
                 'location_id' => $location->getKey(),
                 'trailer_load_id' => $load->getKey(),
                 'dejavoo_terminal_id' => $dejavooTerminalId,
@@ -72,6 +75,10 @@ class NormalizedTransactionService
                 'unit_delta' => $unitDelta,
                 'occurred_at' => $occurredAt,
             ]);
+
+            $this->notifications->notifyThresholdIfReached($load);
+
+            return $transaction;
         }, 3);
     }
 

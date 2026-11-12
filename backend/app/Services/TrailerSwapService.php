@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class TrailerSwapService
 {
-    public function __construct(private readonly TrailerLoadService $loadService) {}
+    public function __construct(
+        private readonly TrailerLoadService $loadService,
+        private readonly OperationalNotificationService $notifications,
+    ) {}
 
     /**
      * @return array{swapped_load: TrailerLoad, replacement_load: TrailerLoad}
@@ -54,6 +57,8 @@ class TrailerSwapService
                 $driver,
                 $swappedAt->toIso8601String(),
             );
+
+            $this->notifications->notifyWarehousePending($lockedLoad);
 
             return [
                 'swapped_load' => $this->loadRelations($lockedLoad),

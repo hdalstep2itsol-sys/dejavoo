@@ -8,6 +8,7 @@ use App\Exceptions\IpospaysProviderProfileNotFinalizedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Webhooks\IpospaysFeedRequest;
 use App\Services\IpospaysFeedAcknowledgement;
+use App\Services\IpospaysFeedFailureAlerter;
 use App\Services\IpospaysFeedPayloadMapper;
 use App\Services\IpospaysFeedProcessor;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class IpospaysFeedController extends Controller
         IpospaysFeedPayloadMapper $mapper,
         IpospaysFeedProcessor $processor,
         IpospaysFeedAcknowledgement $acknowledgement,
+        IpospaysFeedFailureAlerter $failureAlerter,
     ): JsonResponse {
         $processingStage = 'payload_mapping';
         $mapped = null;
@@ -46,6 +48,7 @@ class IpospaysFeedController extends Controller
 
             return $acknowledgement->pendingProviderMapping();
         } catch (Throwable $exception) {
+            $failureAlerter->record($processingStage);
             Log::error('iPOSpays FEED processing failed.', [
                 'code' => 'temporary_processing_failure',
                 'request_id' => $this->safeIdentifier(

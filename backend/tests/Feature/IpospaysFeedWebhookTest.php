@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\DejavooFeedV1HmacProfile;
 use App\Services\IpospaysFeedAuthDiagnosticLogger;
 use App\Services\IpospaysFeedDiagnosticObserver;
+use App\Services\IpospaysFeedFailureAlerter;
 use App\Services\IpospaysFeedPayloadMapper;
 use App\Services\IpospaysFeedProcessor;
 use App\Services\IpospaysTerminalResolver;
@@ -702,6 +703,7 @@ class IpospaysFeedWebhookTest extends TestCase
         $processor = new IpospaysFeedProcessor(
             app(IpospaysTerminalResolver::class),
             $racingService,
+            app(IpospaysFeedFailureAlerter::class),
         );
         $result = $processor->process($this->mapped(
             providerEventId: 'EVENT-TX-RACE',

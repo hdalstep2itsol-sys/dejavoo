@@ -30,6 +30,8 @@ class TrailerLoad extends Model
         'warehouse_notes',
         'warehouse_confirmed_at',
         'warehouse_confirmed_by_user_id',
+        'threshold_notified_at',
+        'warehouse_notified_at',
     ];
 
     protected function casts(): array
@@ -42,6 +44,8 @@ class TrailerLoad extends Model
             'swapped_at' => 'datetime',
             'warehouse_actual_count' => 'integer',
             'warehouse_confirmed_at' => 'datetime',
+            'threshold_notified_at' => 'datetime',
+            'warehouse_notified_at' => 'datetime',
         ];
     }
 

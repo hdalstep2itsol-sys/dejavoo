@@ -21,6 +21,7 @@ class IpospaysFeedProcessor
     public function __construct(
         private readonly IpospaysTerminalResolver $terminals,
         private readonly NormalizedTransactionService $transactions,
+        private readonly IpospaysFeedFailureAlerter $failureAlerter,
     ) {}
 
     public function recordPendingProviderMapping(): IpospaysFeedEvent
@@ -135,6 +136,7 @@ class IpospaysFeedProcessor
                     'terminal_id' => $event->dejavoo_terminal_id,
                     'location_id' => $event->location_id,
                 ]);
+                $this->failureAlerter->record('transaction_normalization');
                 $this->log('normalization_rejected', $event);
 
                 return new IpospaysFeedProcessingResult(

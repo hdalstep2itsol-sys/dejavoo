@@ -63,6 +63,28 @@ After signing in as Owner/Admin, user management is available at `http://localho
 
 Location price changes create effective-dated history entries. Within each location's trailer/load section, Owner/Admin can review normalized transactions and add append-only manual unit adjustments; corrections are recorded as compensating entries rather than edits or deletions.
 
+## Production mail and queued notifications
+
+Operational notifications are queued after database commit. Production must use a real mail transport and a continuously supervised queue worker. Configure these values only in the server runtime environment:
+
+```dotenv
+QUEUE_CONNECTION=database
+MAIL_MAILER=smtp
+MAIL_SCHEME=smtp
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=operations@example.com
+MAIL_FROM_NAME="Dejavoo Logistics Hub"
+IPOSPAYS_FEED_ALERT_EMAIL=operations@example.com
+IPOSPAYS_FEED_FAILURE_ALERT_THRESHOLD=3
+IPOSPAYS_FEED_FAILURE_ALERT_WINDOW_SECONDS=900
+IPOSPAYS_FEED_FAILURE_RECENT_SECONDS=86400
+```
+
+After deployment, run migrations, cache configuration, and run `php artisan queue:work --tries=3 --timeout=90` under the server's process supervisor. Threshold notifications go once per active load to active Owner/Admin users. Swap notifications go once per swapped load to active Warehouse Staff users. Repeated FEED failure alerts go to `IPOSPAYS_FEED_ALERT_EMAIL`, at most once per configured alert window. No provider payload, credentials, card data, or customer data is included in these notifications.
+
 To create deterministic normalized SALE, REFUND, and VOID samples for an existing trailer/load, run:
 
 ```powershell

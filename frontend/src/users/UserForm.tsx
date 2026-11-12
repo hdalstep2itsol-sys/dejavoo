@@ -27,7 +27,7 @@ export function UserForm({
     event.preventDefault();
 
     if (user) {
-      await onSubmit({ name, email, role });
+      await onSubmit({ name, email, role, ...(password ? { password } : {}) });
       return;
     }
 
@@ -100,6 +100,23 @@ export function UserForm({
             Active immediately
           </label>
         </>
+      )}
+
+      {user && (
+        <label className="grid gap-2 text-sm font-medium">
+          Set new password (optional)
+          <input
+            type="password"
+            minLength={12}
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 outline-none focus:border-cyan-400"
+          />
+          <span className="text-xs font-normal text-slate-400">
+            Leave blank to keep the current password. New passwords require at least 12 characters with upper/lowercase letters, a number, and a symbol.
+          </span>
+        </label>
       )}
 
       <div className="flex flex-wrap gap-3">

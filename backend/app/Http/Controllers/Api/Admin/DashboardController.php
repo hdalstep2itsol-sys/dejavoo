@@ -7,8 +7,10 @@ use App\Enums\TrailerLoadStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LoadHistoryRequest;
 use App\Http\Resources\TrailerLoadResource;
+use App\Models\IpospaysFeedEvent;
 use App\Models\Location;
 use App\Models\TrailerLoad;
+use App\Services\IpospaysFeedFailureAlerter;
 use App\Services\TrailerLoadReportService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -16,8 +18,10 @@ use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function dashboard(Request $request): JsonResponse
-    {
+    public function dashboard(
+        Request $request,
+        IpospaysFeedFailureAlerter $failureAlerter,
+    ): JsonResponse {
         $locations = Location::query()
             ->where('is_active', true)
             ->with('dedicatedDriver:id,name,email,is_active')
@@ -31,6 +35,11 @@ class DashboardController extends Controller
             ->get();
 
         $activeByLocation = $activeLoads->keyBy('location_id');
+        $lastProcessedAt = IpospaysFeedEvent::query()
+            ->whereNotNull('normalized_transaction_id')
+            ->whereNotNull('processed_at')
+            ->max('processed_at');
+        $recentFailureCount = $failureAlerter->recentFailureCount();
 
         return response()->json([
             'data' => [
@@ -46,6 +55,17 @@ class DashboardController extends Controller
                         ->filter(fn (TrailerLoad $load) => $load->location->route_type === LocationRouteType::Open
                             && $load->committed_driver_id === null)
                         ->count(),
+                ],
+                'feed_status' => [
+                    'state' => $lastProcessedAt !== null && $recentFailureCount === 0
+                        ? 'healthy'
+                        : 'warning',
+                    'last_processed_at' => $lastProcessedAt,
+                    'recent_failure_count' => $recentFailureCount,
+                    'failure_window_seconds' => max(
+                        60,
+                        (int) config('operations.feed_health.recent_failure_seconds', 86400),
+                    ),
                 ],
                 'locations' => $locations->map(function (Location $location) use ($activeByLocation, $request) {
                     $load = $activeByLocation->get($location->getKey());

@@ -124,6 +124,26 @@ class UserManagementTest extends TestCase
             ->assertJsonMissingPath('data.password');
     }
 
+    public function test_owner_admin_can_reset_an_existing_user_password_securely(): void
+    {
+        $owner = $this->user(UserRole::OwnerAdmin);
+        $user = User::factory()->create(['password' => 'Original-Pass!123']);
+
+        $this->actingAs($owner)
+            ->putJson("/api/admin/users/{$user->id}", [
+                'password' => self::VALID_PASSWORD,
+            ])
+            ->assertOk()
+            ->assertJsonMissingPath('data.password');
+
+        $this->assertTrue(Hash::check(self::VALID_PASSWORD, $user->refresh()->password));
+
+        $this->actingAs($owner)
+            ->putJson("/api/admin/users/{$user->id}", ['password' => 'weak'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('password');
+    }
+
     public function test_owner_admin_can_deactivate_and_reactivate_a_user(): void
     {
         $owner = $this->user(UserRole::OwnerAdmin);

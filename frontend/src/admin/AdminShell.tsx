@@ -15,8 +15,6 @@ const navigation = [
   ["Load History", "/admin/load-history"],
   ["Users", "/admin/users"],
   ["Reports", "/admin/reports"],
-  ["Notifications", "/admin/notifications"],
-  ["Settings", "/admin/settings"],
 ] as const;
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
