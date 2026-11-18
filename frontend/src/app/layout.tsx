@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "dejavoo",
-  description: "Initial dejavoo application foundation",
+  title: "Spring Back Logistics Hub",
+  description:
+    "Private logistics management platform for Spring Back Mattress Recycling.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

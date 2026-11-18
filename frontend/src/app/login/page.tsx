@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/auth/AuthProvider";
 import { roleHome } from "@/auth/types";
@@ -88,6 +89,12 @@ export default function LoginPage() {
             {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <nav aria-label="Public information" className="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-2 border-t border-slate-800 pt-6 text-xs text-slate-400">
+          <Link className="hover:text-cyan-300" href="/about">About</Link>
+          <Link className="hover:text-cyan-300" href="/privacy">Privacy Policy</Link>
+          <Link className="hover:text-cyan-300" href="/terms">Terms of Service</Link>
+        </nav>
       </section>
     </main>
   );
