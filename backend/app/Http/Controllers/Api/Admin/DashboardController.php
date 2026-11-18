@@ -46,20 +46,22 @@ class DashboardController extends Controller
                 'summary' => [
                     'active_locations' => $locations->count(),
                     'ready_loads' => $activeLoads
-                        ->filter(fn (TrailerLoad $load) => $load->operationalStatus() === 'ready')
+                        ->filter(fn(TrailerLoad $load) => $load->operationalStatus() === 'ready')
                         ->count(),
                     'awaiting_warehouse_count' => TrailerLoad::query()
                         ->where('status', TrailerLoadStatus::PendingWarehouseCount->value)
                         ->count(),
                     'open_unclaimed_active_loads' => $activeLoads
-                        ->filter(fn (TrailerLoad $load) => $load->location->route_type === LocationRouteType::Open
+                        ->filter(fn(TrailerLoad $load) => $load->location->route_type === LocationRouteType::Open
                             && $load->committed_driver_id === null)
                         ->count(),
                 ],
                 'feed_status' => [
-                    'state' => $lastProcessedAt !== null && $recentFailureCount === 0
-                        ? 'healthy'
-                        : 'warning',
+                    'state' => $recentFailureCount > 0
+                        ? 'warning'
+                        : ($lastProcessedAt === null
+                            ? 'awaiting_first_transaction'
+                            : 'healthy'),
                     'last_processed_at' => $lastProcessedAt,
                     'recent_failure_count' => $recentFailureCount,
                     'failure_window_seconds' => max(
@@ -132,7 +134,7 @@ class DashboardController extends Controller
         $loads = $query->get();
 
         $locations = Location::query()
-            ->whereHas('trailerLoads', fn (Builder $loadQuery) => $loadQuery->whereIn('status', [
+            ->whereHas('trailerLoads', fn(Builder $loadQuery) => $loadQuery->whereIn('status', [
                 TrailerLoadStatus::PendingWarehouseCount->value,
                 TrailerLoadStatus::Completed->value,
             ]))
