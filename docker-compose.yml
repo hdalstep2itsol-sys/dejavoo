@@ -35,6 +35,10 @@ x-backend-environment: &backend-environment
   MAIL_PASSWORD: ${MAIL_PASSWORD:-}
   MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-hello@example.com}
   MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Dejavoo Logistics Hub}
+  GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+  GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+  GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+  GMAIL_SENDER_EMAIL: ${GMAIL_SENDER_EMAIL:-}
 
 x-backend-service: &backend-service
   build:

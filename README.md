@@ -65,25 +65,32 @@ Location price changes create effective-dated history entries. Within each locat
 
 ## Production mail and queued notifications
 
-Operational notifications are queued after database commit. Docker Compose includes a private `queue-worker` service that uses the backend image, application code, database, mail, and operational-alert configuration. It waits for healthy MySQL and restarts automatically without exposing a port. Configure these values only in the server runtime environment:
+Operational notifications are queued after database commit. Docker Compose includes a private `queue-worker` service that uses the backend image, application code, database, mail, and operational-alert configuration. It waits for healthy MySQL and restarts automatically without exposing a port. Production can deliver mail through the Gmail API over HTTPS, avoiding SMTP port restrictions. Configure these values only in the server runtime environment:
 
 ```dotenv
 QUEUE_CONNECTION=database
-MAIL_MAILER=smtp
-MAIL_SCHEME=smtp
-MAIL_HOST=smtp.example.com
-MAIL_PORT=587
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_FROM_ADDRESS=operations@example.com
+MAIL_MAILER=gmail-api
+MAIL_FROM_ADDRESS=sender@example.com
 MAIL_FROM_NAME="Dejavoo Logistics Hub"
-IPOSPAYS_FEED_ALERT_EMAIL=operations@example.com
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+GMAIL_REFRESH_TOKEN=
+GMAIL_SENDER_EMAIL=sender@example.com
+IPOSPAYS_FEED_ALERT_EMAIL=recipient@example.com
 IPOSPAYS_FEED_FAILURE_ALERT_THRESHOLD=3
 IPOSPAYS_FEED_FAILURE_ALERT_WINDOW_SECONDS=900
 IPOSPAYS_FEED_FAILURE_RECENT_SECONDS=86400
 ```
 
+`MAIL_FROM_ADDRESS` and `GMAIL_SENDER_EMAIL` must identify the Gmail account associated with the refresh token. OAuth credentials remain only in the server `.env`; they must never be committed or passed on a command line. The transport exchanges the refresh token at Google's OAuth token endpoint, keeps the short-lived access token only in process memory, and sends MIME messages through the Gmail API. SMTP remains available by selecting `MAIL_MAILER=smtp` and configuring the existing `MAIL_*` settings instead.
+
 After deployment, run migrations and recreate the Compose services with `docker compose up -d --build`. Compose runs `php artisan queue:work --tries=3 --timeout=90` continuously in `queue-worker`; no separate host-level worker is needed. If cached Laravel configuration is used, rebuild it in the backend container and restart both `backend` and `queue-worker` so they receive the same values. Threshold notifications go once per active load to active Owner/Admin users. Swap notifications go once per swapped load to active Warehouse Staff users. Repeated FEED failure alerts go to `IPOSPAYS_FEED_ALERT_EMAIL`, at most once per configured alert window. No provider payload, credentials, card data, or customer data is included in these notifications.
+
+After the worker is healthy, send one controlled test message to an approved address (replace only the recipient):
+
+```bash
+docker compose exec -T backend php artisan tinker --execute='Illuminate\Support\Facades\Mail::raw("Spring Back Logistics Hub Gmail API delivery test.", function ($message) { $message->to("recipient@example.com")->subject("Spring Back Logistics Hub email test"); });'
+```
 
 To create deterministic normalized SALE, REFUND, and VOID samples for an existing trailer/load, run:
 

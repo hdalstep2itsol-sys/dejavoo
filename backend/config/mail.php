@@ -29,13 +29,21 @@ return [
     | when delivering an email. You may specify which one you're using for
     | your mailers below. You may also add additional mailers if needed.
     |
-    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
+    | Supported: "gmail-api", "smtp", "sendmail", "mailgun", "ses", "ses-v2",
     |            "postmark", "resend", "log", "array",
     |            "failover", "roundrobin"
     |
     */
 
     'mailers' => [
+
+        'gmail-api' => [
+            'transport' => 'gmail-api',
+            'client_id' => env('GMAIL_CLIENT_ID'),
+            'client_secret' => env('GMAIL_CLIENT_SECRET'),
+            'refresh_token' => env('GMAIL_REFRESH_TOKEN'),
+            'sender_email' => env('GMAIL_SENDER_EMAIL'),
+        ],
 
         'smtp' => [
             'transport' => 'smtp',
@@ -109,7 +117,7 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
+        'address' => env('MAIL_FROM_ADDRESS', env('GMAIL_SENDER_EMAIL', 'hello@example.com')),
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
