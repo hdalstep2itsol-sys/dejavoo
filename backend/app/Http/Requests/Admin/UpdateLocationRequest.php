@@ -24,6 +24,7 @@ class UpdateLocationRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'unit_price' => ['sometimes', 'required', 'numeric', 'gt:0', 'decimal:0,2'],
             'haul_threshold' => ['sometimes', 'required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'early_warning_threshold' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'decimal:0,2'],
             'route_type' => ['sometimes', 'required', Rule::enum(LocationRouteType::class)],
             'dedicated_driver_id' => ['sometimes', 'nullable', 'integer'],
             'is_active' => ['sometimes', 'boolean'],
@@ -49,6 +50,13 @@ class UpdateLocationRequest extends FormRequest
                     $driverId,
                     $location->dedicated_driver_id,
                 );
+
+                $warning = $this->input('early_warning_threshold', $location->early_warning_threshold);
+                $haul = $this->input('haul_threshold', $location->haul_threshold);
+                if ($warning !== null && is_numeric($warning) && is_numeric($haul)
+                    && bccomp((string) $warning, (string) $haul, 2) >= 0) {
+                    $validator->errors()->add('early_warning_threshold', 'The early warning must be below the haul threshold.');
+                }
             },
         ];
     }

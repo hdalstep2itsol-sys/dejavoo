@@ -22,6 +22,7 @@ export interface Location {
   name: string;
   unit_price: string;
   haul_threshold: string;
+  early_warning_threshold: string | null;
   route_type: LocationRouteType;
   dedicated_driver: DriverOption | null;
   is_active: boolean;
@@ -39,6 +40,7 @@ export interface LocationInput {
   name: string;
   unit_price: string;
   haul_threshold: string;
+  early_warning_threshold: string | null;
   route_type: LocationRouteType;
   dedicated_driver_id: number | null;
 }

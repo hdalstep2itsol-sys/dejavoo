@@ -39,7 +39,7 @@ class TrailerLoadAdjustmentController extends Controller
                 'created_by_user_id' => $request->user()->getKey(),
             ]);
 
-            $notifications->notifyThresholdIfReached($trailerLoad);
+            $notifications->notifyThresholdIfReached($trailerLoad, (string) $adjustment->unit_delta);
 
             return $adjustment;
         }, 3);

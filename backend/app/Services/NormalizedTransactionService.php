@@ -76,7 +76,7 @@ class NormalizedTransactionService
                 'occurred_at' => $occurredAt,
             ]);
 
-            $this->notifications->notifyThresholdIfReached($load);
+            $this->notifications->notifyThresholdIfReached($load, (string) $transaction->unit_delta);
 
             return $transaction;
         }, 3);

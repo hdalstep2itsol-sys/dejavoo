@@ -14,6 +14,7 @@ class LocationResource extends JsonResource
             'name' => $this->name,
             'unit_price' => $this->unit_price,
             'haul_threshold' => $this->haul_threshold,
+            'early_warning_threshold' => $this->early_warning_threshold,
             'route_type' => $this->route_type->value,
             'dedicated_driver' => $this->whenLoaded(
                 'dedicatedDriver',

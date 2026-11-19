@@ -2,8 +2,11 @@
 
 namespace App\Notifications;
 
+use App\Enums\UserRole;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -16,6 +19,7 @@ class TrailerLoadThresholdReached extends Notification implements ShouldQueue
         public readonly string $locationName,
         public readonly string $operationalUnits,
         public readonly string $haulThreshold,
+        public readonly string $driverName = 'Unclaimed open route',
     ) {
         $this->afterCommit();
     }
@@ -26,6 +30,13 @@ class TrailerLoadThresholdReached extends Notification implements ShouldQueue
         return ['mail'];
     }
 
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        return $notifiable instanceof AnonymousNotifiable
+            || ($notifiable instanceof User && $notifiable->is_active
+            && in_array($notifiable->role, [UserRole::OwnerAdmin, UserRole::Driver], true));
+    }
+
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
@@ -34,6 +45,7 @@ class TrailerLoadThresholdReached extends Notification implements ShouldQueue
             ->line("{$this->locationName} has reached or exceeded its haul threshold.")
             ->line("Operational units: {$this->operationalUnits}")
             ->line("Haul threshold: {$this->haulThreshold}")
+            ->line("Driver: {$this->driverName}")
             ->line("Load ID: {$this->loadId}")
             ->line('Open the Logistics Hub to review the active route.');
     }

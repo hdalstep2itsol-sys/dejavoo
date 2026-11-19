@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class WarehouseConfirmationService
 {
+    public function __construct(private readonly OperationalNotificationService $notifications) {}
+
     public function confirm(
         TrailerLoad $load,
         User $warehouseUser,
@@ -35,6 +37,8 @@ class WarehouseConfirmationService
                 'warehouse_confirmed_at' => now(),
                 'warehouse_confirmed_by_user_id' => $warehouseUser->getKey(),
             ]);
+
+            $this->notifications->notifyWarehouseConfirmed($lockedLoad);
 
             return $lockedLoad->refresh()->load([
                 'location:id,name,haul_threshold,route_type,dedicated_driver_id',

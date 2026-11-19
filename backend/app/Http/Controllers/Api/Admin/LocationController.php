@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\UpdateLocationRequest;
 use App\Http\Resources\LocationResource;
 use App\Models\Location;
 use App\Services\LocationPriceService;
+use App\Services\OperationalNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,7 @@ class LocationController extends Controller
     public function store(
         StoreLocationRequest $request,
         LocationPriceService $priceService,
+        OperationalNotificationService $notifications,
     ): JsonResponse {
         $data = $request->validated();
 
@@ -40,9 +42,12 @@ class LocationController extends Controller
             $data['dedicated_driver_id'] = null;
         }
 
-        $location = DB::transaction(function () use ($data, $request, $priceService) {
+        $location = DB::transaction(function () use ($data, $request, $priceService, $notifications) {
             $location = Location::query()->create($data);
             $priceService->createInitial($location, $request->user());
+            if ($location->route_type === LocationRouteType::Dedicated) {
+                $notifications->notifyDedicatedDriverChanged($location, null, $location->dedicated_driver_id);
+            }
 
             return $location;
         }, 3);
@@ -61,9 +66,10 @@ class LocationController extends Controller
         UpdateLocationRequest $request,
         Location $location,
         LocationPriceService $priceService,
+        OperationalNotificationService $notifications,
     ): LocationResource {
         $data = $request->validated();
-        $location = DB::transaction(function () use ($data, $location, $request, $priceService) {
+        $location = DB::transaction(function () use ($data, $location, $request, $priceService, $notifications) {
             $lockedLocation = Location::query()
                 ->whereKey($location->getKey())
                 ->lockForUpdate()
@@ -86,7 +92,12 @@ class LocationController extends Controller
                 );
             }
 
+            $oldDriverId = $lockedLocation->route_type === LocationRouteType::Dedicated
+                ? $lockedLocation->dedicated_driver_id : null;
             $lockedLocation->update($data);
+            $newDriverId = $lockedLocation->route_type === LocationRouteType::Dedicated
+                ? $lockedLocation->dedicated_driver_id : null;
+            $notifications->notifyDedicatedDriverChanged($lockedLocation, $oldDriverId, $newDriverId);
 
             return $lockedLocation;
         }, 3);

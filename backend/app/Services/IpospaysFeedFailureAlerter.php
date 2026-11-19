@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Notifications\IpospaysFeedFailureAlert;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Throwable;
@@ -29,23 +30,34 @@ class IpospaysFeedFailureAlerter
                 return;
             }
 
-            if (! Cache::add("{$windowKey}:alerted", true, $windowSeconds * 2)) {
-                return;
-            }
+            DB::afterCommit(function () use ($windowKey, $windowSeconds, $recipient, $failureCount, $processingStage): void {
+                $alertedKey = "{$windowKey}:alerted";
 
-            Notification::route('mail', $recipient)->notify(
-                new IpospaysFeedFailureAlert(
-                    $failureCount,
-                    $windowSeconds,
-                    mb_substr($processingStage, 0, 64),
-                    now()->toIso8601String(),
-                ),
-            );
+                try {
+                    if (! Cache::add($alertedKey, true, $windowSeconds * 2)) {
+                        return;
+                    }
+
+                    try {
+                        Notification::route('mail', $recipient)->notify(
+                            new IpospaysFeedFailureAlert(
+                                $failureCount,
+                                $windowSeconds,
+                                mb_substr($processingStage, 0, 64),
+                                now()->toIso8601String(),
+                            ),
+                        );
+                    } catch (Throwable $exception) {
+                        Cache::forget($alertedKey);
+
+                        throw $exception;
+                    }
+                } catch (Throwable $exception) {
+                    $this->logDispatchFailure($exception);
+                }
+            });
         } catch (Throwable $exception) {
-            Log::warning('iPOSpays FEED failure alert could not be queued.', [
-                'code' => 'feed_failure_alert_dispatch_failed',
-                'exception_class' => $exception::class,
-            ]);
+            $this->logDispatchFailure($exception);
         }
     }
 
@@ -59,5 +71,13 @@ class IpospaysFeedFailureAlerter
         Cache::add($key, 0, $seconds);
 
         return (int) Cache::increment($key);
+    }
+
+    private function logDispatchFailure(Throwable $exception): void
+    {
+        Log::warning('iPOSpays FEED failure alert could not be queued.', [
+            'code' => 'feed_failure_alert_dispatch_failed',
+            'exception_class' => $exception::class,
+        ]);
     }
 }

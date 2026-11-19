@@ -151,6 +151,7 @@ export default function LocationDetailPage() {
                     name: location.name,
                     unit_price: location.unit_price,
                     haul_threshold: location.haul_threshold,
+                    early_warning_threshold: location.early_warning_threshold,
                     route_type: location.route_type,
                     dedicated_driver_id: location.dedicated_driver?.id ?? null,
                   }}

@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class TrailerLoadCommitmentService
 {
+    public function __construct(private readonly OperationalNotificationService $notifications) {}
+
     public function claim(TrailerLoad $load, User $driver): TrailerLoad
     {
         return DB::transaction(function () use ($load, $driver) {
@@ -41,6 +43,8 @@ class TrailerLoadCommitmentService
                 'committed_by_user_id' => $driver->getKey(),
             ]);
 
+            $this->notifications->notifyOpenRouteClaimed($lockedLoad, $driver);
+
             return $this->loadRelations($lockedLoad);
         }, 3);
     }
@@ -61,6 +65,7 @@ class TrailerLoadCommitmentService
             $source = $lockedLoad->location->route_type === LocationRouteType::Dedicated
                 ? DriverCommitmentSource::Dedicated
                 : DriverCommitmentSource::OpenClaim;
+            $oldDriverId = $lockedLoad->committed_driver_id;
 
             $lockedLoad->update([
                 'committed_driver_id' => $driver->getKey(),
@@ -68,6 +73,12 @@ class TrailerLoadCommitmentService
                 'committed_at' => now(),
                 'committed_by_user_id' => $performedBy->getKey(),
             ]);
+
+            if ($source === DriverCommitmentSource::Dedicated) {
+                $this->notifications->notifyDedicatedDriverChanged(
+                    $lockedLoad->location, $oldDriverId, $driver->getKey(), $lockedLoad->getKey(),
+                );
+            }
 
             return $this->loadRelations($lockedLoad);
         }, 3);
@@ -82,12 +93,21 @@ class TrailerLoadCommitmentService
                 throw new TrailerLoadCommitmentException('Only an active trailer/load commitment can be removed.');
             }
 
+            $oldDriverId = $lockedLoad->committed_driver_id;
+            $wasDedicated = $lockedLoad->commitment_source === DriverCommitmentSource::Dedicated;
+
             $lockedLoad->update([
                 'committed_driver_id' => null,
                 'commitment_source' => null,
                 'committed_at' => null,
                 'committed_by_user_id' => null,
             ]);
+
+            if ($wasDedicated) {
+                $this->notifications->notifyDedicatedDriverChanged(
+                    $lockedLoad->location, $oldDriverId, null, $lockedLoad->getKey(),
+                );
+            }
 
             return $this->loadRelations($lockedLoad);
         }, 3);

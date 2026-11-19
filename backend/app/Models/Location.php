@@ -16,6 +16,7 @@ class Location extends Model
         'name',
         'unit_price',
         'haul_threshold',
+        'early_warning_threshold',
         'route_type',
         'dedicated_driver_id',
         'is_active',
@@ -26,6 +27,7 @@ class Location extends Model
         return [
             'unit_price' => 'decimal:2',
             'haul_threshold' => 'decimal:2',
+            'early_warning_threshold' => 'decimal:2',
             'route_type' => LocationRouteType::class,
             'is_active' => 'boolean',
         ];

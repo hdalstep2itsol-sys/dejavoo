@@ -11,15 +11,25 @@ use App\Models\Location;
 use App\Models\TrailerLoad;
 use App\Models\User;
 use App\Notifications\IpospaysFeedFailureAlert;
+use App\Notifications\RouteAssignmentNotice;
+use App\Notifications\TrailerLoadEarlyWarning;
 use App\Notifications\TrailerLoadThresholdReached;
+use App\Notifications\WarehouseCountConfirmed;
 use App\Notifications\WarehouseLoadPending;
 use App\Services\IpospaysFeedFailureAlerter;
 use App\Services\LocationPriceService;
 use App\Services\NormalizedTransactionService;
+use App\Services\OperationalNotificationService;
+use App\Services\TrailerLoadCommitmentService;
+use App\Services\TrailerSwapService;
+use App\Services\WarehouseConfirmationService;
+use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use RuntimeException;
 use Tests\TestCase;
 
 class OperationalNotificationTest extends TestCase
@@ -73,6 +83,83 @@ class OperationalNotificationTest extends TestCase
             return $notification instanceof ShouldQueue;
         });
         $this->assertNotNull($load->refresh()->threshold_notified_at);
+    }
+
+    public function test_early_warning_is_disabled_by_default_and_crosses_once_for_active_open_route_drivers(): void
+    {
+        $owner = $this->user(UserRole::OwnerAdmin);
+        $driver = $this->user(UserRole::Driver);
+        $inactive = $this->user(UserRole::Driver, false);
+        [$location, $load] = $this->locationAndLoad('3.00', $owner);
+        $service = app(NormalizedTransactionService::class);
+        $service->create($location->id, NormalizedTransactionType::Sale, '20.00', now()->addSecond(), 'test', 'warning-1');
+        Notification::assertNothingSent();
+
+        $location->update(['early_warning_threshold' => '2.00']);
+        $service->create($location->id, NormalizedTransactionType::Sale, '20.00', now()->addSecond(), 'test', 'warning-2');
+        $service->create($location->id, NormalizedTransactionType::Sale, '20.00', now()->addSecond(), 'test', 'warning-3');
+        Notification::assertSentToTimes($owner, TrailerLoadEarlyWarning::class, 1);
+        Notification::assertSentToTimes($driver, TrailerLoadEarlyWarning::class, 1);
+        Notification::assertNotSentTo($inactive, TrailerLoadEarlyWarning::class);
+        Notification::assertSentToTimes($driver, TrailerLoadThresholdReached::class, 1);
+        $this->assertNotNull($load->refresh()->early_warning_notified_at);
+    }
+
+    public function test_dedicated_load_notifies_only_its_active_driver_and_owner(): void
+    {
+        $owner = $this->user(UserRole::OwnerAdmin);
+        $driver = $this->user(UserRole::Driver);
+        $other = $this->user(UserRole::Driver);
+        [$location] = $this->locationAndLoad('1.00', $owner, $driver);
+        $location->update(['route_type' => LocationRouteType::Dedicated, 'dedicated_driver_id' => $driver->id]);
+        app(NormalizedTransactionService::class)->create(
+            $location->id, NormalizedTransactionType::Sale, '20.00', now()->addSecond(), 'test', 'dedicated-ready',
+        );
+        Notification::assertSentToTimes($owner, TrailerLoadThresholdReached::class, 1);
+        Notification::assertSentToTimes($driver, TrailerLoadThresholdReached::class, 1);
+        Notification::assertNotSentTo($other, TrailerLoadThresholdReached::class);
+    }
+
+    public function test_open_claim_and_dedicated_assignment_changes_notify_only_affected_active_users(): void
+    {
+        $owner = $this->user(UserRole::OwnerAdmin);
+        $driver = $this->user(UserRole::Driver);
+        $other = $this->user(UserRole::Driver);
+        [$location, $load] = $this->locationAndLoad('70.00', $owner);
+        app(TrailerLoadCommitmentService::class)->claim($load, $driver);
+        Notification::assertSentToTimes($owner, RouteAssignmentNotice::class, 1);
+        Notification::assertNotSentTo($driver, RouteAssignmentNotice::class);
+
+        $location->update(['route_type' => LocationRouteType::Dedicated, 'dedicated_driver_id' => $driver->id]);
+        $notifier = app(OperationalNotificationService::class);
+        DB::transaction(fn () => $notifier->notifyDedicatedDriverChanged($location, $driver->id, $other->id));
+        DB::transaction(fn () => $notifier->notifyDedicatedDriverChanged($location, $other->id, $other->id));
+        Notification::assertSentToTimes($driver, RouteAssignmentNotice::class, 1);
+        Notification::assertSentToTimes($other, RouteAssignmentNotice::class, 1);
+    }
+
+    public function test_swap_and_warehouse_confirmation_notify_management_once_and_rollback_sends_nothing(): void
+    {
+        $owner = $this->user(UserRole::OwnerAdmin);
+        $driver = $this->user(UserRole::Driver);
+        $warehouse = $this->user(UserRole::WarehouseStaff);
+        [$location, $load] = $this->locationAndLoad('70.00', $owner, $driver);
+
+        DB::beginTransaction();
+        $load->update(['status' => TrailerLoadStatus::PendingWarehouseCount, 'swapped_at' => now()]);
+        app(OperationalNotificationService::class)->notifyWarehousePending($load);
+        Notification::assertNothingSent();
+        DB::rollBack();
+        $load->refresh();
+
+        app(TrailerSwapService::class)->swap($load, $driver);
+        Notification::assertSentToTimes($warehouse, WarehouseLoadPending::class, 1);
+        Notification::assertSentToTimes($owner, WarehouseLoadPending::class, 1);
+        $confirmed = app(WarehouseConfirmationService::class)->confirm($load, $warehouse, 4, 'Counted');
+        Notification::assertSentToTimes($owner, WarehouseCountConfirmed::class, 1);
+        Notification::assertSentTo($owner, WarehouseCountConfirmed::class, fn ($notification) => $notification->actualUnits === 4 && $notification->variance === '4.00000000');
+        app(OperationalNotificationService::class)->notifyWarehouseConfirmed($confirmed->refresh());
+        Notification::assertSentToTimes($owner, WarehouseCountConfirmed::class, 1);
     }
 
     public function test_manual_adjustment_can_trigger_the_same_one_time_threshold_notification(): void
@@ -143,6 +230,62 @@ class OperationalNotificationTest extends TestCase
         );
         Notification::assertCount(1);
         $this->assertSame(3, $alerter->recentFailureCount());
+    }
+
+    public function test_feed_failure_alert_can_retry_after_queue_dispatch_fails(): void
+    {
+        config()->set('operations.feed_alerts.recipient', 'operations@example.test');
+        config()->set('operations.feed_alerts.threshold', 1);
+        config()->set('operations.feed_alerts.window_seconds', 900);
+        $alerter = app(IpospaysFeedFailureAlerter::class);
+        $alertedKey = 'ipospays-feed:failures:window:'.intdiv(now()->timestamp, 900).':alerted';
+
+        $failingDispatcher = new class implements Dispatcher
+        {
+            public int $calls = 0;
+
+            public function send($notifiables, $notification): never
+            {
+                $this->calls++;
+
+                throw new RuntimeException('Queue unavailable');
+            }
+
+            public function sendNow($notifiables, $notification, ?array $channels = null): never
+            {
+                throw new RuntimeException('Queue unavailable');
+            }
+        };
+        $this->app->instance(Dispatcher::class, $failingDispatcher);
+
+        DB::transaction(fn () => $alerter->record('transaction_processing'));
+        $this->assertSame(1, $failingDispatcher->calls);
+        $this->assertFalse(Cache::has($alertedKey));
+
+        $this->app->instance(Dispatcher::class, Notification::fake());
+        $alerter->record('transaction_processing');
+
+        Notification::assertCount(1);
+        $this->assertTrue(Cache::has($alertedKey));
+    }
+
+    public function test_feed_failure_alert_waits_for_commit_and_rollbacks_do_not_suppress_it(): void
+    {
+        config()->set('operations.feed_alerts.recipient', 'operations@example.test');
+        config()->set('operations.feed_alerts.threshold', 1);
+        config()->set('operations.feed_alerts.window_seconds', 900);
+        $alerter = app(IpospaysFeedFailureAlerter::class);
+        $alertedKey = 'ipospays-feed:failures:window:'.intdiv(now()->timestamp, 900).':alerted';
+
+        DB::beginTransaction();
+        $alerter->record('transaction_processing');
+        Notification::assertNothingSent();
+        $this->assertFalse(Cache::has($alertedKey));
+        DB::rollBack();
+
+        $alerter->record('transaction_processing');
+        Notification::assertCount(1);
+        $this->assertTrue(Cache::has($alertedKey));
     }
 
     public function test_owner_dashboard_exposes_only_safe_feed_health_status(): void

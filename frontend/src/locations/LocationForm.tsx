@@ -7,6 +7,7 @@ const emptyLocation: LocationInput = {
   name: "",
   unit_price: "",
   haul_threshold: "70.00",
+  early_warning_threshold: null,
   route_type: "open",
   dedicated_driver_id: null,
 };
@@ -81,6 +82,23 @@ export function LocationForm({
           />
         </label>
       </div>
+
+      <label className="grid gap-2 text-sm font-medium">
+        Early warning units (optional)
+        <input
+          type="number"
+          min="0.01"
+          step="0.01"
+          value={form.early_warning_threshold ?? ""}
+          onChange={(event) => setForm({
+            ...form,
+            early_warning_threshold: event.target.value || null,
+          })}
+          placeholder="Disabled"
+          className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 outline-none focus:border-cyan-400"
+        />
+        <span className="text-xs font-normal text-slate-400">Leave blank until an early warning threshold is approved.</span>
+      </label>
 
       <label className="grid gap-2 text-sm font-medium">
         Route type

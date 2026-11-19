@@ -23,6 +23,7 @@ class StoreLocationRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'unit_price' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
             'haul_threshold' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'early_warning_threshold' => ['nullable', 'numeric', 'gt:0', 'decimal:0,2', 'lt:haul_threshold'],
             'route_type' => ['required', Rule::enum(LocationRouteType::class)],
             'dedicated_driver_id' => ['nullable', 'integer'],
             'is_active' => ['sometimes', 'boolean'],
