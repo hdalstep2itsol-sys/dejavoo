@@ -5,6 +5,8 @@ x-backend-environment: &backend-environment
   APP_ENV: ${APP_ENV:-local}
   APP_DEBUG: ${APP_DEBUG:-true}
   APP_URL: ${APP_URL:-http://localhost:${BACKEND_PORT:-8080}}
+  # Each container has its own /tmp; never read the bind-mounted bootstrap/cache/config.php.
+  APP_CONFIG_CACHE: /tmp/dejavoo-config.php
   DB_CONNECTION: mysql
   DB_HOST: mysql
   DB_PORT: 3306

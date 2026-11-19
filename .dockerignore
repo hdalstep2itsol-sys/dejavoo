@@ -2,6 +2,7 @@
 .env
 backend/.env
 backend/vendor
+backend/bootstrap/cache/*.php
 backend/storage/logs/*
 frontend/.env.local
 frontend/node_modules

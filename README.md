@@ -84,7 +84,17 @@ IPOSPAYS_FEED_FAILURE_RECENT_SECONDS=86400
 
 `MAIL_FROM_ADDRESS` and `GMAIL_SENDER_EMAIL` must identify the Gmail account associated with the refresh token. OAuth credentials remain only in the server `.env`; they must never be committed or passed on a command line. The transport exchanges the refresh token at Google's OAuth token endpoint, keeps the short-lived access token only in process memory, and sends MIME messages through the Gmail API. SMTP remains available by selecting `MAIL_MAILER=smtp` and configuring the existing `MAIL_*` settings instead.
 
-After deployment, run migrations and recreate the Compose services with `docker compose up -d --build`. Compose runs `php artisan queue:work --tries=3 --timeout=90` continuously in `queue-worker`; no separate host-level worker is needed. If cached Laravel configuration is used, rebuild it in the backend container and restart both `backend` and `queue-worker` so they receive the same values. Threshold notifications go once per active load to active Owner/Admin users. Swap notifications go once per swapped load to active Warehouse Staff users. Repeated FEED failure alerts go to `IPOSPAYS_FEED_ALERT_EMAIL`, at most once per configured alert window. No provider payload, credentials, card data, or customer data is included in these notifications.
+After deployment, recreate the Compose services with `docker compose up -d --build`; this configuration-cache change needs no migration. Compose runs `php artisan queue:work --tries=3 --timeout=90` continuously in `queue-worker`; no separate host-level worker is needed. Both backend and worker rebuild Laravel configuration from their own runtime environment on every start. Their config cache lives in container-local `/tmp/dejavoo-config.php`, so the bind-mounted `backend/bootstrap/cache/config.php` is never read or shared. Preserve the server's existing FEED environment source (such as its private Compose override or env file), and recreate both services after changing it. Threshold notifications go once per active load to active Owner/Admin users. Swap notifications go once per swapped load to active Warehouse Staff users. Repeated FEED failure alerts go to `IPOSPAYS_FEED_ALERT_EMAIL`, at most once per configured alert window. No provider payload, credentials, card data, or customer data is included in these notifications.
+
+After recreating services, verify the non-secret runtime values in **both** containers without printing credentials (include the server Compose override with `-f` if one is used):
+
+```bash
+for service in backend queue-worker; do
+  docker compose exec -T "$service" php artisan tinker --execute='if (config("ipospays.feed.enabled") !== true || config("queue.default") !== "database" || config("queue.connections.database.retry_after") !== 120 || app()->getCachedConfigPath() !== "/tmp/dejavoo-config.php") { throw new RuntimeException("Runtime configuration mismatch"); } echo "Runtime configuration verified\n";'
+done
+```
+
+Do not send a test FEED request as part of this configuration check. A mismatch must be resolved before asking Dejavoo to retry delivery.
 
 After the worker is healthy, send one controlled test message to an approved address (replace only the recipient):
 
@@ -147,10 +157,10 @@ On the deployed server:
 
 1. Set `IPOSPAYS_FEED_DIAGNOSTIC_MODE=true` and the provided `IPOSPAYS_FEED_HMAC_SECRET` in the backend runtime environment. For a diagnostics-only observation keep mapping fail-closed with `IPOSPAYS_FEED_MAPPING_PROFILE=unfinalized`; for the controlled transaction retest use `dejavoo_feed_v1` for both profiles and set `IPOSPAYS_FEED_TIMEZONE=America/New_York`.
 2. Ensure the PHP/web process can write to `backend/storage/logs`.
-3. From the deployed backend directory, run `php artisan config:cache`.
+3. Recreate `backend` and `queue-worker` with Compose so each rebuilds its isolated configuration cache from the updated runtime environment. Run the non-secret verification above.
 4. Monitor the current daily file with `tail -f storage/logs/ipospays-feed-$(date +%F).log` while Merchant Services triggers a connection attempt.
 5. Confirm the request structure and authentication outcome without sharing or copying any secret or payload values.
-6. After the observation window, set `IPOSPAYS_FEED_DIAGNOSTIC_MODE=false` and run `php artisan config:cache` again.
+6. After the observation window, set `IPOSPAYS_FEED_DIAGNOSTIC_MODE=false` in the server's existing private environment source and recreate both services again.
 
 Diagnostic logs must remain private server-side operational data and should not be exposed through the web server.
 
